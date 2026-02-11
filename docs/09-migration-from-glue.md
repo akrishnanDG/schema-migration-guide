@@ -18,7 +18,7 @@ This guide covers migrating from AWS Glue Schema Registry to Confluent Schema Re
 | **Schema references** | Not supported | Fully supported |
 | **Compatibility modes** | BACKWARD, FORWARD, FULL, NONE | All of the above + transitive variants |
 | **API** | AWS SDK (Glue API) | REST API (HTTP) |
-| **Authentication** | AWS IAM | API key/secret, mTLS, OAuth/OIDC |
+| **Authentication** | AWS IAM | API key/secret, OAuth/OIDC |
 
 The wire format difference is the most significant operationally. During migration, consumers must handle both formats simultaneously -- this is what the `secondary.deserializer` pattern provides.
 

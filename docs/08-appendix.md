@@ -75,10 +75,6 @@ Full docs: [https://github.com/akrishnanDG/srctl](https://github.com/akrishnanDG
 | `schema.registry.url` | SR endpoint URL (comma-separated for failover) | `https://psrc-abc12.us-east-2.aws.confluent.cloud` |
 | `basic.auth.credentials.source` | Credential source for HTTP basic auth | `USER_INFO` |
 | `basic.auth.user.info` | API key and secret (`<key>:<secret>`) | `ABCDEFGH12345:xYzSecret` |
-| `schema.registry.ssl.truststore.location` | SSL truststore path (on-prem with private CA) | `/etc/kafka/ssl/truststore.jks` |
-| `schema.registry.ssl.truststore.password` | Truststore password | `changeit` |
-| `schema.registry.ssl.keystore.location` | SSL keystore path (mTLS) | `/etc/kafka/ssl/keystore.jks` |
-| `schema.registry.ssl.keystore.password` | Keystore password | `changeit` |
 | `key.subject.name.strategy` | Subject naming strategy for keys | `TopicNameStrategy` |
 | `value.subject.name.strategy` | Subject naming strategy for values | `TopicNameStrategy` |
 | `auto.register.schemas` | Auto-register new schemas; set `false` during migration | `false` |
@@ -110,7 +106,7 @@ Full docs: [https://github.com/akrishnanDG/srctl](https://github.com/akrishnanDG
 | **IMPORT Mode** | Allows registration with pre-assigned schema IDs for ID-preserving migration. |
 | **READWRITE Mode** | Default mode. Normal operations with auto-assigned IDs. |
 | **READONLY Mode** | Read-only; rejects writes. Useful for protecting source during migration. |
-| **Schema Reference** | Cross-schema dependency (Protobuf imports, Avro/JSON `$ref`). Must be registered in order. |
+| **Schema Reference** | Cross-schema dependency (Protobuf imports, Avro/JSON `$ref`). Handled automatically by srctl during migration. |
 | **Soft Delete** | Mark as deleted without permanent removal. Recoverable via `?deleted=true`. |
 | **Hard Delete** | Permanent removal. Requires prior soft delete. |
 | **Normalize** | Treat logically equivalent schemas as identical regardless of formatting. |

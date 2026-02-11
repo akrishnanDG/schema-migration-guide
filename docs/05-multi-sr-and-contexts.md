@@ -15,11 +15,15 @@ Contexts are virtual namespaces within a single Schema Registry instance. They a
 
 ---
 
-## When to Use Contexts vs. Separate Instances
+## When to Use Schema Contexts for Migration
 
-**Use contexts when** teams share infrastructure, you want centralized governance, cross-team schema discovery is valuable, or operational simplicity is the priority.
+Use contexts during migration in two scenarios:
 
-**Use separate instances when** strict tenant isolation is required, different SLAs or upgrade cadences apply, regulatory rules mandate physical separation, or teams operate in disconnected networks.
+1. **The destination Schema Registry already has schemas.** Migrating into the default context risks subject name collisions with existing subjects. Placing the migrated schemas under a dedicated context (e.g., `:.migrated:`) keeps them isolated from schemas already registered on the target.
+
+2. **You are migrating from multiple source registries into one target.** Each source registry likely has its own set of subject names that may overlap with others. Assigning each source its own context (e.g., `:.team-a:`, `:.team-b:`) keeps every source's schemas isolated and avoids conflicts.
+
+If the target registry is empty and you are migrating from a single source, contexts are unnecessary -- migrate directly into the default context.
 
 ---
 

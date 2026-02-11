@@ -93,13 +93,6 @@ Additional flags: `--restore-configs`, `--restore-modes`.
 
 ---
 
-## Handling References
-
-Schemas that reference other schemas (Protobuf imports, JSON Schema `$ref`, Avro
-named-type references) must be registered in dependency order. All three `srctl`
-options handle this automatically by building a dependency graph and performing a
-topological sort before registration. No manual intervention is required.
-
 ## Preserving Schema IDs
 
 ID preservation is critical: serialized Kafka messages embed the schema ID, and
@@ -140,7 +133,7 @@ If you cannot install `srctl`, the same migration can be performed using `curl`
 and `jq` against the Schema Registry REST API. The process involves exporting
 subjects and configs, setting the target to IMPORT mode, registering schemas with
 preserved IDs in dependency order, and restoring READWRITE mode. See
-[Appendix B: REST API Reference](appendix-b-rest-api-reference.md) for endpoint
+[Appendix](08-appendix.md) for endpoint
 details and example requests.
 
 ---

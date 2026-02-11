@@ -1,6 +1,6 @@
 # Migration Overview
 
-This guide covers migrating from the **Community (open-source) Schema Registry** to **Confluent Platform SR** (self-managed) or **Confluent Cloud SR** (fully managed). It includes tooling options, planning, validation, and cutover procedures.
+This guide covers migrating from the **Community (open-source) Schema Registry** to **Confluent Platform SR** (self-managed) or **Confluent Cloud SR** (fully managed), and migrating from **Confluent Platform (Enterprise) SR** to **Confluent Cloud SR** using Schema Exporter. It includes tooling options, planning, validation, and cutover procedures.
 
 ---
 
@@ -13,7 +13,7 @@ The Community Schema Registry serves basic needs but lacks the capabilities orga
 - **Schema Linking** -- Continuous, automated schema replication across Confluent Platform registries.
 - **Tags, Data Contracts, Metadata** -- Data quality rules and tagging in Confluent Cloud.
 - **Enterprise support** -- SLA-backed support, JMX metrics, health checks, and managed upgrades.
-- **Security** -- mTLS, OAuth/SSO, and audit logging out of the box.
+- **Security** -- mTLS and OAuth/SSO for on-prem Confluent Platform; OAuth/SSO and audit logging for Confluent Cloud.
 - **Confluent Cloud** -- Fully managed, 99.99% SLA, Stream Governance, pay-as-you-go pricing.
 
 ---
@@ -38,6 +38,15 @@ The Community Schema Registry serves basic needs but lacks the capabilities orga
 | **Tooling** | `srctl clone` (recommended), REST API |
 | **ID Preservation** | Supported via `srctl clone` or API with explicit ID assignment |
 
+### Path 3: CP Enterprise SR to Confluent Cloud SR
+
+| Aspect | Details |
+|---|---|
+| **Deployment** | Fully managed by Confluent |
+| **Best for** | Migrating from self-managed Confluent Platform 7.x+ to Cloud |
+| **Tooling** | Schema Exporter (continuous sync), `srctl clone` (one-time copy) |
+| **ID Preservation** | Supported by both Schema Exporter and `srctl clone` |
+
 ---
 
 ## Decision Tree {#decision-tree}
@@ -46,22 +55,28 @@ The Community Schema Registry serves basic needs but lacks the capabilities orga
 START
   |
   v
-[Single source SR, or multiple?]
+[Is your source Confluent Platform 7.x+?]
   |                       |
-  Single                Multiple
+  Yes                     No (Community SR)
   |                       |
   v                       v
-[Need to preserve      [Consolidating into
- schema IDs?]           a single target?]
-  |         |            |         |
-  Yes       No           Yes       No
-  |         |            |         |
-  v         v            v         v
- Use       Use          Use       Migrate each
- srctl     srctl        srctl     independently
- clone     clone        clone     (single-source
-                        with       flow per SR)
-                        --context
+[Use Schema Exporter    [Single source SR,
+ for continuous sync     or multiple?]
+ to Cloud, or srctl       |              |
+ clone for one-time       Single       Multiple
+ copy]                    |              |
+                          v              v
+                        [Need to       [Consolidating into
+                         preserve       a single target?]
+                         schema IDs?]    |         |
+                          |      |       Yes       No
+                          Yes    No      |         |
+                          |      |       v         v
+                          v      v      Use       Migrate each
+                         Use    Use    srctl     independently
+                         srctl  srctl  clone     (single-source
+                         clone  clone  with       flow per SR)
+                                       --context
 ```
 
 `srctl clone` is the recommended approach for all community SR migration scenarios. It handles dependency ordering, ID preservation, and mode transitions automatically.
@@ -84,6 +99,10 @@ srctl clone \
 ```
 
 For air-gapped environments or when you need to inspect schemas before importing, `srctl export` + `srctl import` provides a two-phase alternative. For full state replication including configs, modes, and tags, use `srctl backup` + `srctl restore`. See [Migration via srctl](04-migration-via-api.md) for details on all options.
+
+### Schema Exporter (CP Enterprise to Cloud)
+
+Available when the source is Confluent Platform 7.x+. Provides continuous schema replication to another CP instance or to Confluent Cloud. See [Migration via Schema Exporter](03-migration-via-exporter.md).
 
 ---
 
@@ -130,6 +149,7 @@ Keep the target in IMPORT mode during migration (for ID preservation), switch to
 | Document | Description |
 |---|---|
 | [Pre-Migration Assessment](02-pre-migration-assessment.md) | Inventory schemas, subjects, IDs, and dependencies |
+| [Migration via Schema Exporter](03-migration-via-exporter.md) | Continuous schema replication from CP Enterprise to Cloud |
 | [Migration via srctl](04-migration-via-api.md) | Clone, export/import, backup/restore options |
 | [Multiple SRs & Contexts](05-multi-sr-and-contexts.md) | Consolidating multiple registries |
 | [Post-Migration Validation](06-post-migration-validation.md) | Verify migration success and cutover |

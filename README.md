@@ -3,6 +3,7 @@
 Migrate to **Confluent Platform Schema Registry** or **Confluent Cloud Schema Registry** from:
 
 - Community (open-source) Confluent Schema Registry
+- Confluent Platform (Enterprise)
 - AWS Glue Schema Registry
 - Apicurio Registry *(coming soon)*
 
@@ -53,6 +54,12 @@ Not sure which approach to use? See the **[Decision Tree](docs/01-overview.md#de
 | 5 | [Post-Migration Validation](docs/06-post-migration-validation.md) | Verification, client reconfiguration, and cutover |
 | 6 | [Troubleshooting](docs/07-troubleshooting.md) | Common issues and resolutions |
 | 7 | [Appendix](docs/08-appendix.md) | API reference, configuration keys, limits, and glossary |
+
+### CP Enterprise to Cloud Migration
+
+| # | Document | Description |
+|---|----------|-------------|
+| 8 | [Migration via Schema Exporter](docs/03-migration-via-exporter.md) | Schema Exporter approach |
 
 ### AWS Glue SR Migration
 

@@ -52,7 +52,7 @@ srctl import --from-dir ./split-schemas/ --target http://target-sr:8081
 
 **Problem:** Registration fails with `Reference not found: subject "com.example.Address" version 1`.
 
-**Cause:** Referenced schemas must be registered before the schemas that depend on them.
+**Cause:** The source registry contains dangling references (subjects that reference schemas that no longer exist or were never registered).
 
 **Solution:** Check for dangling references, then export with dependency resolution:
 ```bash
@@ -79,7 +79,7 @@ export SRCTL_TARGET_AUTH_SECRET="your-api-secret"
 
 ---
 
-## 7. Network Connectivity Issues
+## 6. Network Connectivity Issues
 
 **Problem:** Commands fail with `connection timed out` or `no such host`.
 
@@ -94,7 +94,7 @@ curl -s -o /dev/null -w "%{http_code}" https://psrc-xxxxx.us-east-2.aws.confluen
 
 ---
 
-## 8. Client Deserialization Failures After Migration
+## 7. Client Deserialization Failures After Migration
 
 **Problem:** Consumers fail with `Error retrieving Avro schema for id 42` after cutover.
 
@@ -109,7 +109,7 @@ srctl mode set READWRITE --global --url http://target-sr:8081
 
 ---
 
-## 9. "Mode is not IMPORT" Errors
+## 8. "Mode is not IMPORT" Errors
 
 **Problem:** Import fails with `Mode is not IMPORT for subject "my-topic-value"`.
 
@@ -124,7 +124,7 @@ srctl mode set READWRITE --global --url http://target-sr:8081
 
 ---
 
-## 10. Rate Limiting on Confluent Cloud
+## 9. Rate Limiting on Confluent Cloud
 
 **Problem:** Bulk operations fail with `429 Too Many Requests`.
 
@@ -138,7 +138,7 @@ srctl import --source http://source-sr:8081 --target https://psrc-xxxxx.confluen
 
 ---
 
-## 11. Subject Name Mismatches
+## 10. Subject Name Mismatches
 
 **Problem:** Clients cannot find schemas because subject names differ between source and target.
 
@@ -152,7 +152,7 @@ srctl export --url http://source-sr:8081 --output ./export/ --subject-map ./subj
 
 ---
 
-## 12. Duplicate Schema Versions
+## 11. Duplicate Schema Versions
 
 **Problem:** A subject has more versions than expected, with identical content under multiple version numbers.
 

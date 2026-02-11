@@ -49,28 +49,9 @@ Fix all dangling references before proceeding — either re-register the missing
 
 ---
 
-## Topology
-
-If you have multiple Schema Registry clusters, run the inventory against each:
-
-```bash
-srctl stats --url http://sr-cluster-1:8081
-srctl stats --url http://sr-cluster-2:8081
-```
-
-If merging multiple clusters into one target, check for subject name collisions:
-
-```bash
-srctl compare --url http://sr-cluster-1:8081 --target-url http://sr-cluster-2:8081
-```
-
-Collisions can be resolved with Schema Registry contexts (`srctl clone --context`), subject renaming, or keeping environments separate. See [Multiple SRs & Contexts](05-multi-sr-and-contexts.md).
-
----
-
 ## Security and Authentication
 
-Identify the auth mechanism on the source (none, HTTP Basic, mTLS, RBAC, OAuth) and document the target model. If migrating to Confluent Cloud, auth uses API keys — all client configs will need credential updates.
+Identify the auth mechanism on the source (none, HTTP Basic, mTLS, RBAC, OAuth) and document the target model. If migrating to Confluent Cloud, auth uses API keys or OAuth — all client configs will need credential updates.
 
 ---
 
