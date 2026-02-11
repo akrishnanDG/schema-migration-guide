@@ -5,7 +5,7 @@ Migrate to **Confluent Platform Schema Registry** or **Confluent Cloud Schema Re
 - Community (open-source) Confluent Schema Registry
 - Confluent Platform (Enterprise)
 - AWS Glue Schema Registry
-- Apicurio Registry *(coming soon)*
+- Apicurio Registry
 
 ## Prerequisites
 
@@ -19,6 +19,12 @@ For AWS Glue migrations:
 | Tool | Purpose |
 |------|---------|
 | [`glue-to-ccsr`](https://github.com/akrishnanDG/glue-to-ccsr) | Migrate schemas from AWS Glue SR to Confluent Cloud SR |
+
+For Apicurio migrations:
+
+| Tool | Purpose |
+|------|---------|
+| [`apicurio-to-confluent-sr`](https://github.com/akrishnanDG/apicurio-to-confluent-sr) | Migrate schemas from Apicurio Registry to Confluent SR |
 
 ## Quick Start
 
@@ -71,7 +77,7 @@ Not sure which approach to use? See the **[Decision Tree](docs/01-overview.md#de
 
 | # | Document | Description |
 |---|----------|-------------|
-| 10 | [Migration from Apicurio](docs/10-migration-from-apicurio.md) | *(Coming soon)* |
+| 10 | [Migration from Apicurio](docs/10-migration-from-apicurio.md) | End-to-end guide using apicurio-to-confluent-sr |
 
 ## Tools
 
@@ -80,3 +86,4 @@ Not sure which approach to use? See the **[Decision Tree](docs/01-overview.md#de
 | [srctl](https://github.com/akrishnanDG/srctl) | CLI (Go) | Schema Registry operations — export, import, clone, compare, split, validate |
 | [glue-to-ccsr](https://github.com/akrishnanDG/glue-to-ccsr) | CLI (Go) | One-time schema copy from AWS Glue SR to Confluent Cloud SR |
 | [aws-glue-confluent-sr-migration-demo](https://github.com/akrishnanDG/aws-glue-confluent-sr-migration-demo) | Java Demo | Zero-downtime migration demo using `secondary.deserializer` |
+| [apicurio-to-confluent-sr](https://github.com/akrishnanDG/apicurio-to-confluent-sr) | CLI (Go) | Migrate schemas from Apicurio Registry to Confluent SR |

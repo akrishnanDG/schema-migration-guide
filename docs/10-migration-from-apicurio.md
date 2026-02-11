@@ -1,58 +1,147 @@
 # Migration from Apicurio Registry
 
-> **Status:** This guide is under active development. A dedicated migration tool is being built to facilitate migrations from Apicurio Registry to Confluent Schema Registry.
+Migrate from Apicurio Registry to Confluent Schema Registry (Platform or Cloud) using [apicurio-to-confluent-sr](https://github.com/akrishnanDG/apicurio-to-confluent-sr).
 
-## Overview
+---
 
-[Apicurio Registry](https://www.apicur.io/registry/) is an open-source schema and API registry that supports a broad range of artifact types, including Avro, Protobuf, JSON Schema, OpenAPI, AsyncAPI, and GraphQL. Organizations running Apicurio may choose to migrate to Confluent Schema Registry for tighter integration with the Confluent ecosystem, production-grade support, and standardized Kafka SerDe tooling.
-
-### Key Differences Between Apicurio and Confluent SR
+## Key Differences
 
 | Concept | Apicurio Registry | Confluent Schema Registry |
 |---|---|---|
 | Schema organization | Artifact groups and artifact IDs | Subjects (optionally with contexts) |
 | Supported types | Avro, Protobuf, JSON Schema, OpenAPI, AsyncAPI, GraphQL | Avro, Protobuf, JSON Schema |
-| Compatibility rules | Per-artifact and global rules; rule types include validity and compatibility | Per-subject and global compatibility levels |
-| REST API | `/apis/registry/v2/...` endpoints | `/subjects/...`, `/schemas/...` endpoints |
-| Wire format | Custom SerDe with its own wire format (e.g., content ID or global ID encoded differently) | Standard 5-byte prefix: magic byte `0x0` + 4-byte schema ID |
+| Compatibility rules | Per-artifact and global rules (validity + compatibility) | Per-subject and global compatibility levels |
+| REST API | `/apis/registry/v2/...` or `/v3/...` | `/subjects/...`, `/schemas/...` |
+| Wire format | Custom SerDe (content ID or global ID encoded differently) | Magic byte `0x0` + 4-byte schema ID |
 
-These differences affect schema organization, client configuration, and how schema identifiers are embedded in Kafka messages.
+The wire format difference means all producers and consumers must switch from Apicurio SerDe libraries to Confluent SerDe libraries during migration.
 
-## Planned Migration Approach
+---
 
-The dedicated migration tool will follow a phased approach:
+## Prerequisites
 
-1. **Phase 1 -- Schema Export from Apicurio.** Extract all artifact groups, artifact versions, metadata, and compatibility rules from the source Apicurio Registry instance.
+- [apicurio-to-confluent-sr](https://github.com/akrishnanDG/apicurio-to-confluent-sr) installed (`go build -o schema-migrate .`)
+- Network access to both Apicurio Registry and Confluent SR
+- Credentials for both registries (if auth is enabled)
 
-2. **Phase 2 -- Schema Mapping and Transformation.** Map Apicurio artifact group/artifact ID pairs to Confluent SR subject names. Transform metadata and compatibility rules into their Confluent equivalents.
+---
 
-3. **Phase 3 -- Import to Confluent SR.** Load the transformed schemas into Confluent Schema Registry with schema ID preservation where possible.
+## Step 1: Configure
 
-4. **Phase 4 -- Client Migration.** Update all producers and consumers to switch from Apicurio SerDe libraries to Confluent SerDe libraries, adjusting wire format expectations accordingly.
+```yaml
+# config.yaml
+apicurio:
+  url: https://your-apicurio-registry:8080
+  api_version: v2          # v2 or v3
 
-## In the Meantime
+confluent:
+  url: https://psrc-XXXXX.confluent.cloud
+  auth_type: api-key
+  api_key: "<API_KEY>"
+  api_secret: "<API_SECRET>"
+  # For Confluent Platform use auth_type: basic with username/password
+```
 
-Manual migration is possible today using existing APIs and tooling:
+---
 
-- **Export from Apicurio** using the Apicurio REST API. List and retrieve artifacts per group:
+## Step 2: Dry Run
+
+Preview the migration to see how Apicurio artifacts will map to Confluent subjects:
+
+```bash
+./schema-migrate migrate --dry-run
+```
+
+This produces a mapping table and a `mapping.json` file. The tool detects collisions (multiple Apicurio artifacts mapping to the same Confluent subject) and warns you.
+
+| Status | Meaning |
+|--------|---------|
+| `NEW` | Will be created in Confluent |
+| `EXISTS (same)` | Already exists with identical content — skipped |
+| `EXISTS (different)` | Subject exists but content differs — new version created |
+
+Review `mapping.json` and fix any collisions or subject name mismatches before proceeding.
+
+---
+
+## Step 3: Migrate
+
+```bash
+# Using auto-generated mapping
+./schema-migrate migrate
+
+# Or with a reviewed mapping file
+./schema-migrate migrate --mapping-file mapping.json
+
+# For Confluent Cloud, add rate limiting
+./schema-migrate migrate --rate-limit 5
+```
+
+Useful flags:
+
+| Flag | Purpose |
+|------|---------|
+| `--all-versions` | Migrate all versions, not just latest |
+| `--copy-compatibility` | Copy compatibility levels from Apicurio (default: true) |
+| `--fail-fast` | Stop on first error |
+| `--rate-limit N` | Limit to N requests/sec (recommended for Cloud) |
+| `--subject-format` | Custom subject naming (Go template, e.g., `'{{.Group}}.{{.ArtifactId}}-{{.Type}}'`) |
+
+The migration is idempotent — re-running skips already-registered schemas and retries failures.
+
+---
+
+## Step 4: Verify
+
+```bash
+./schema-migrate compare
+```
+
+All entries should show `MATCH`. The tool uses Confluent's schema check API for semantic comparison (ignores whitespace and field ordering differences).
+
+---
+
+## Step 5: Update Clients
+
+Switch producers and consumers from Apicurio SerDe to Confluent SerDe:
+
+1. **Change `schema.registry.url`** from Apicurio to Confluent
+2. **Update authentication** to use Confluent API key/secret or OAuth
+3. **Replace SerDe libraries** — remove Apicurio SerDe dependency, add Confluent Avro/Protobuf/JSON Schema serializer
+4. **Verify subject names** match what your serializers expect (depends on your `subject.name.strategy`)
+
+---
+
+## Subject Name Mapping
+
+Apicurio organizes schemas by group/artifact; Confluent uses flat subjects. The tool supports several mapping strategies:
+
+- **Default** — artifact ID becomes the subject name (e.g., `OrderCreated-value`)
+- **Topic map** — explicit mapping in config:
+  ```yaml
+  mapping:
+    strategy: topic-name
+    topic_map:
+      payments/OrderCreated: orders
+      payments/OrderKey: orders
   ```
-  GET /apis/registry/v2/groups/{groupId}/artifacts
-  GET /apis/registry/v2/groups/{groupId}/artifacts/{artifactId}/versions
-  ```
-- **Import to Confluent SR** using [srctl](https://github.com/akrishnanDG/srctl) (`srctl import` or `srctl clone`).
+- **Custom format** — Go template: `--subject-format '{{.Group}}-{{.ArtifactId}}-{{.Type}}'`
+- **Manual** — edit `mapping.json` from a `--dry-run`
 
-### Key Considerations
+---
 
-- **Group-to-subject mapping:** Decide how Apicurio artifact groups map to Confluent subjects or contexts. A common pattern is `{groupId}.{artifactId}-value` as the subject name.
-- **ID mismatch:** Apicurio's content ID and global ID are not equivalent to Confluent's schema ID. Plan for ID reassignment or use the Confluent import mode that allows setting IDs explicitly.
-- **Wire format change:** Apicurio's SerDe encodes schema identifiers differently than Confluent's standard wire format. All producers and consumers must be updated to use Confluent SerDe libraries, and any in-flight data using the old wire format will need special handling during the transition.
+## Troubleshooting
 
-## Resources
+- **"Schema being registered is incompatible"** — subject exists in Confluent with incompatible content. Temporarily set compatibility to `NONE` or use a different subject name in `mapping.json`.
+- **Subject name collisions** — two Apicurio artifacts from different groups map to the same subject. Fix via `topic_map` in config, editing `mapping.json`, or using `--subject-format` with group prefix.
+- **Rate limiting (HTTP 429)** — use `--rate-limit 5` for Confluent Cloud.
+- **Partial failure** — re-run the migration. It's idempotent and will skip completed schemas.
 
-- [Apicurio Registry Documentation](https://www.apicur.io/registry/docs/)
-- [srctl -- Schema Registry CLI tool](https://github.com/akrishnanDG/srctl)
-- [Migration via srctl](04-migration-via-api.md)
+---
 
-## Contributing
+## References
 
-If you would like to contribute to or test the Apicurio migration tool, reach out or watch this space for updates. Contributions around schema mapping logic and edge-case handling are especially welcome.
+- [apicurio-to-confluent-sr](https://github.com/akrishnanDG/apicurio-to-confluent-sr) — Migration tool
+- [Post-Migration Validation](06-post-migration-validation.md)
+- [Multiple SRs & Contexts](05-multi-sr-and-contexts.md) — if the target already has schemas
+- [Troubleshooting](07-troubleshooting.md)
