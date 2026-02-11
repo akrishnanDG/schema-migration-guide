@@ -15,15 +15,50 @@ Migrate from Apicurio Registry to Confluent Schema Registry (Platform or Cloud) 
 | Wire format | Custom SerDe (content ID or global ID encoded differently) | Magic byte `0x0` + 4-byte schema ID |
 | Schema IDs | Global ID (int64) and content ID (int64) | Schema ID (int32) |
 
-### Wire Format -- No Dual-Read Capability
+### Wire Format and Dual-Read with Confluent Compatibility Mode
 
-The wire format difference is the most operationally significant aspect of this migration. Unlike the Glue-to-Confluent migration (where `secondary.deserializer` enables consumers to handle both formats simultaneously), **there is no dual-read capability between Apicurio and Confluent wire formats**. The Apicurio SerDe encodes schema identifiers differently (global ID or content ID, depending on configuration), and there is no built-in mechanism to detect and route between the two formats at the consumer level.
+By default, Apicurio SerDe uses its own wire format (8-byte global ID or content ID), which is incompatible with Confluent's wire format (magic byte `0x00` + 4-byte schema ID). However, Apicurio SerDe provides a **Confluent compatibility mode** that can enable dual-read during migration.
 
-This means the migration **requires a planned cutover**:
+**Apicurio's `apicurio.registry.as-confluent` property** configures the serializer/deserializer to use the Confluent-compatible 4-byte integer ID format instead of the default 8-byte long. When enabled, Apicurio SerDe reads and writes messages in a format the Confluent `KafkaAvroDeserializer` can understand.
 
-- **Option A: Big-bang cutover** -- All producers switch to Confluent SerDe at the same time during a maintenance window. Consumers switch immediately after.
-- **Option B: Blue-green deployment** -- Deploy a parallel set of consumers reading from the same topics, configured with Confluent SerDe. Route traffic to the new consumer group, then switch producers. Once all in-flight Apicurio-format messages are consumed by the old consumers, decommission them.
-- **Option C: Topic-by-topic** -- Migrate one topic at a time. For each topic, switch all producers and consumers together during a brief pause.
+#### Migration Strategy: Dual-Read via Confluent Compatibility Mode
+
+If your Apicurio producers are currently using the **default wire format** (8-byte IDs), follow this phased approach:
+
+1. **Phase 1: Copy schemas** from Apicurio to Confluent SR (using `apicurio-to-confluent-sr`).
+2. **Phase 2: Switch consumers to Apicurio deserializer with Confluent compatibility mode.** Configure the Apicurio deserializer to point at the **Confluent SR** and enable Confluent-compatible ID handling:
+
+   ```java
+   // Use Apicurio deserializer with Confluent compatibility mode
+   props.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG,
+       "io.apicurio.registry.serde.avro.AvroKafkaDeserializer");
+   // Point at the new Confluent SR
+   props.put("apicurio.registry.url", "https://psrc-XXXXX.confluent.cloud/apis/ccompat/v7");
+   props.put("apicurio.registry.as-confluent", "true");
+   props.put("apicurio.auth.username", "<API_KEY>");
+   props.put("apicurio.auth.password", "<API_SECRET>");
+   ```
+
+   This consumer can read **both** existing messages (Apicurio 8-byte format) and new messages (Confluent 4-byte format) by detecting the ID format at the wire level.
+
+3. **Phase 3: Switch producers** to the Confluent `KafkaAvroSerializer` one at a time (same as the Glue migration pattern).
+4. **Phase 4: Switch consumers** to the standard Confluent `KafkaAvroDeserializer` once all producers are migrated and historical Apicurio-format messages are consumed.
+
+#### If Your Apicurio Producers Already Use Confluent Compatibility Mode
+
+If your Apicurio environment was already configured with `apicurio.registry.as-confluent=true`, the wire format is already Confluent-compatible. In this case:
+
+- Messages use the same 4-byte ID format as Confluent.
+- The Confluent `KafkaAvroDeserializer` can read these messages directly after schema migration.
+- Migration is straightforward: copy schemas, switch consumer config to Confluent SR, switch producer config to Confluent SR.
+
+#### Fallback: Planned Cutover (No Dual-Read)
+
+If the Apicurio `as-confluent` compatibility mode does not work for your environment (e.g., you use content IDs instead of global IDs, or your Apicurio version does not support it), the migration requires a planned cutover:
+
+- **Big-bang** -- All producers and consumers for a topic switch at the same time during a maintenance window.
+- **Blue-green** -- Deploy a parallel consumer group with Confluent SerDe, route traffic, then switch producers.
+- **Topic-by-topic** -- Migrate one topic at a time with a brief pause per topic.
 
 Plan your cutover strategy before starting the schema migration.
 
