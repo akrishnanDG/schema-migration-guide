@@ -39,7 +39,7 @@ Manual migration is possible today using existing APIs and tooling:
   GET /apis/registry/v2/groups/{groupId}/artifacts
   GET /apis/registry/v2/groups/{groupId}/artifacts/{artifactId}/versions
   ```
-- **Import to Confluent SR** using [srctl](https://github.com/akrishnanDG/srctl) or REST API scripts such as the [import-schemas.sh](../scripts/import-schemas.sh) script included in this guide.
+- **Import to Confluent SR** using [srctl](https://github.com/akrishnanDG/srctl) (`srctl import` or `srctl clone`).
 
 ### Key Considerations
 
@@ -51,7 +51,7 @@ Manual migration is possible today using existing APIs and tooling:
 
 - [Apicurio Registry Documentation](https://www.apicur.io/registry/docs/)
 - [srctl -- Schema Registry CLI tool](https://github.com/akrishnanDG/srctl)
-- [Import schemas script](../scripts/import-schemas.sh)
+- [Migration via srctl](04-migration-via-api.md)
 
 ## Contributing
 
