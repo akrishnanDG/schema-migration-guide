@@ -14,10 +14,29 @@ srctl compare \
   --url http://source-sr:8081 \
   --target-url https://target-sr.confluent.cloud \
   --target-username <API_KEY> \
-  --target-password <API_SECRET>
+  --target-password <API_SECRET> \
+  --workers 100
 ```
 
 All checks must pass before proceeding. If schema IDs do not match, re-run the migration with ID preservation enabled -- deserialization depends on matching IDs.
+
+### Verify destination mode
+
+After `srctl clone` completes, confirm the destination registry is in READWRITE mode and not still in IMPORT mode:
+
+```bash
+srctl mode get --global \
+  --url https://target-sr.confluent.cloud \
+  --username <API_KEY> --password <API_SECRET>
+```
+
+If the mode is still IMPORT, set it to READWRITE before proceeding:
+
+```bash
+srctl mode set READWRITE --global \
+  --url https://target-sr.confluent.cloud \
+  --username <API_KEY> --password <API_SECRET>
+```
 
 ---
 
@@ -78,31 +97,31 @@ srctl validate --file evolved-schema.avsc --subject my-subject \
 
 ---
 
-## 4. Cutover Strategies
+## 4. Cutover and Rollback
 
-**Blue-green.** Keep both registries running. Switch clients in batches, starting with low-risk applications. Soak 24-48 hours between batches. Decommission the source only after all clients are stable on the target.
+After `srctl clone` completes and `srctl compare` passes, perform a one-time cutover:
 
-**Canary.** Migrate a single representative application that exercises both produce and consume paths. Monitor for 48-72 hours before proceeding with a broader rollout.
+1. **Set the source registry to READONLY** to prevent any further schema registrations:
 
-**Rolling.** Update the Schema Registry URL in your central config store (ConfigMaps, Consul, environment variables) and trigger rolling restarts across the fleet. Halt the rollout if error rates spike.
+   ```bash
+   srctl mode set READONLY --global \
+     --url http://source-sr:8081
+   ```
 
----
+2. **Set the destination registry to READWRITE** so it can accept new schemas going forward:
 
-## 5. Rollback
+   ```bash
+   srctl mode set READWRITE --global \
+     --url https://target-sr.confluent.cloud \
+     --username <API_KEY> --password <API_SECRET>
+   ```
 
-**Keep the source registry running** until all clients have been stable on the target for at least 72 hours and a final `srctl compare` confirms no drift.
+3. **Point CI/CD pipelines and schema-registering clients to the new registry first.** These are the systems that write new schemas, so they must move before consumers and producers. Update pipeline configs, schema registration scripts, and any automation that calls the Schema Registry write APIs.
 
-**To roll back**, revert client configurations to point at the source registry and restart affected services. If new schema versions were registered on the target after cutover, register them on the source before completing the rollback to prevent deserialization failures.
+4. **Update producer and consumer configs** to read from the new registry. Roll out in batches, starting with low-risk applications. Monitor error rates between batches. See section 2 above for the client configuration properties.
 
----
+5. **Keep the source registry running in READONLY for 72 hours** as a rollback window. During this period, monitor all clients for schema resolution errors. Run a final `srctl compare` at the end of the window to confirm no drift.
 
-## Checklist
+**To roll back**, revert client configurations to point at the source registry and restart affected services. If new schema versions were registered on the target after cutover, register them on the source before completing the rollback to prevent deserialization failures. Set the source back to READWRITE and the target back to READONLY (or IMPORT) as needed.
 
-- [ ] `srctl compare` -- all checks pass (subjects, versions, hashes, IDs, compatibility)
-- [ ] Test producer and consumer against the target registry
-- [ ] `srctl validate` -- compatibility enforcement confirmed
-- [ ] Cutover strategy selected and executed
-- [ ] Clients monitored for errors during and after cutover
-- [ ] Source registry kept running through observation period
-- [ ] Final `srctl compare` confirms no drift
-- [ ] Source registry decommissioned after full validation
+After 72 hours with no issues and a clean final `srctl compare`, decommission the source registry.

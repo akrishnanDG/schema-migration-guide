@@ -9,13 +9,23 @@ Before migrating, run a quick assessment to catch issues that could block the mi
 Get a summary of your registry — total subjects, schema types, and version counts:
 
 ```bash
-srctl stats --url http://source-sr:8081
+srctl stats --url http://source-sr:8081 --workers 100
 ```
 
-Review the subject list for anything no longer in use. Dead subjects add unnecessary risk — soft-delete them before migration if possible.
+Review the subject list for anything no longer in use. Dead subjects add unnecessary risk — delete them before migration if possible. Schema Registry requires a soft-delete before a hard-delete:
 
 ```bash
-srctl list --url http://source-sr:8081 --versions
+# Step 1: Soft-delete the subject (marks it as deleted but retains it internally)
+srctl delete --subject <name> --url http://source-sr:8081
+
+# Step 2: Hard-delete the subject (permanently removes it)
+srctl delete --subject <name> --url http://source-sr:8081 --permanent
+```
+
+List all subjects with version details:
+
+```bash
+srctl list --url http://source-sr:8081 --versions --workers 100
 ```
 
 ---
@@ -25,7 +35,7 @@ srctl list --url http://source-sr:8081 --versions
 Confluent Cloud enforces a 1 MB maximum schema size. Self-managed registries have no default limit, so oversized schemas may exist in your source.
 
 ```bash
-srctl stats --url http://source-sr:8081 --size
+srctl stats --url http://source-sr:8081 --size --workers 100
 ```
 
 If any schemas exceed the limit, use `srctl split` to break them into smaller referenced subjects:
@@ -51,7 +61,7 @@ Fix all dangling references before proceeding — either re-register the missing
 
 ## Security and Authentication
 
-Identify the auth mechanism on the source (none, HTTP Basic, mTLS, RBAC, OAuth) and document the target model. If migrating to Confluent Cloud, auth uses API keys or OAuth — all client configs will need credential updates.
+Identify the auth mechanism on the source (none, HTTP Basic, mTLS, RBAC, OAuth) and document the target model. If migrating to Confluent Cloud, auth uses API keys or OAuth — all client configs will need credential updates when you point clients to the new registry after migration.
 
 ---
 
@@ -61,8 +71,9 @@ Every application that connects to Schema Registry must be reconfigured during c
 
 For each, document:
 - Current `schema.registry.url`
-- Required credential changes for the target
 - Cutover strategy (blue-green, canary, or rolling)
+
+> **Note:** Credential updates happen AFTER the schema copy is complete and validated, when you point clients to the new registry. Do not change client configurations before the migration is finished.
 
 ---
 
@@ -76,6 +87,16 @@ srctl health --url https://target-sr-endpoint
 ```
 
 For on-prem to Cloud migrations, ensure outbound HTTPS (443) is allowed to `*.confluent.cloud`.
+
+---
+
+## Post-Migration: Lock Down the Source
+
+After the migration is complete, validated, and clients are pointed to the new registry:
+
+1. **Set source to READONLY** -- prevents any further schema registrations on the old registry.
+2. **Update CI/CD pipelines** -- point all schema-registering pipelines (CI/CD, Kafka Connect schema auto-registration, etc.) to the new registry.
+3. **Decommission timeline** -- keep the source registry running in READONLY for 48-72 hours as a rollback safety net before decommissioning.
 
 ---
 

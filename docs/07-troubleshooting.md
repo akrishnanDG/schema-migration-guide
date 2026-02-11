@@ -14,7 +14,7 @@ Common issues during Schema Registry migrations, organized by symptom.
 ```bash
 comm -12 <(srctl schemas list --url http://source-sr:8081 --output json | jq '.[].id' | sort -n) \
          <(srctl schemas list --url http://target-sr:8081 --output json | jq '.[].id' | sort -n)
-srctl export --remap-ids --url http://source-sr:8081 --output ./export/
+srctl export --remap-ids --url http://source-sr:8081 --output ./export/ --workers 100
 ```
 
 ---
@@ -28,7 +28,7 @@ srctl export --remap-ids --url http://source-sr:8081 --output ./export/
 **Solution:** Temporarily disable compatibility, migrate, then restore:
 ```bash
 srctl compatibility set NONE --global --url http://target-sr:8081
-srctl import --source http://source-sr:8081 --target http://target-sr:8081
+srctl import --source http://source-sr:8081 --target http://target-sr:8081 --workers 100
 srctl compatibility set BACKWARD --global --url http://target-sr:8081
 ```
 
@@ -43,7 +43,7 @@ srctl compatibility set BACKWARD --global --url http://target-sr:8081
 **Solution:** Split into smaller referenced sub-schemas:
 ```bash
 srctl split --subject my-large-schema-value --url http://source-sr:8081 --output ./split-schemas/
-srctl import --from-dir ./split-schemas/ --target http://target-sr:8081
+srctl import --from-dir ./split-schemas/ --target http://target-sr:8081 --workers 100
 ```
 
 ---
@@ -57,8 +57,8 @@ srctl import --from-dir ./split-schemas/ --target http://target-sr:8081
 **Solution:** Check for dangling references, then export with dependency resolution:
 ```bash
 srctl dangling --url http://source-sr:8081
-srctl export --url http://source-sr:8081 --output ./export/ --resolve-references
-srctl import --from-dir ./export/ --target http://target-sr:8081
+srctl export --url http://source-sr:8081 --output ./export/ --resolve-references --workers 100
+srctl import --from-dir ./export/ --target http://target-sr:8081 --workers 100
 ```
 
 ---
@@ -103,9 +103,11 @@ curl -s -o /dev/null -w "%{http_code}" https://psrc-xxxxx.us-east-2.aws.confluen
 **Solution:** Re-import with ID preservation in IMPORT mode:
 ```bash
 srctl mode set IMPORT --global --url http://target-sr:8081
-srctl import --source http://source-sr:8081 --target http://target-sr:8081 --preserve-ids
+srctl import --source http://source-sr:8081 --target http://target-sr:8081 --preserve-ids --workers 100
 srctl mode set READWRITE --global --url http://target-sr:8081
 ```
+
+> **Note:** This typically happens when the destination was not in IMPORT mode during migration. `srctl clone` handles this automatically, but if you used manual methods, ensure the destination was in IMPORT mode.
 
 ---
 
@@ -114,6 +116,8 @@ srctl mode set READWRITE --global --url http://target-sr:8081
 **Problem:** Import fails with `Mode is not IMPORT for subject "my-topic-value"`.
 
 **Cause:** The target must be in IMPORT mode to accept schemas with explicit IDs (default is READWRITE).
+
+> **Important:** `srctl clone` handles IMPORT mode automatically. This error only occurs with manual REST API migration.
 
 **Solution:** Set IMPORT mode before migration, restore afterward:
 ```bash
@@ -146,7 +150,7 @@ srctl import --source http://source-sr:8081 --target https://psrc-xxxxx.confluen
 
 **Solution:** Remap subjects during export with a mapping file:
 ```bash
-srctl export --url http://source-sr:8081 --output ./export/ --subject-map ./subject-mapping.json
+srctl export --url http://source-sr:8081 --output ./export/ --subject-map ./subject-mapping.json --workers 100
 # subject-mapping.json: {"com.example.User": "users-topic-value", ...}
 ```
 
@@ -163,6 +167,6 @@ srctl export --url http://source-sr:8081 --output ./export/ --subject-map ./subj
 srctl schemas deduplicate --url http://target-sr:8081 --dry-run
 srctl subjects delete-all --url http://target-sr:8081 --permanent
 srctl mode set IMPORT --global --url http://target-sr:8081
-srctl import --source http://source-sr:8081 --target http://target-sr:8081 --preserve-ids
+srctl import --source http://source-sr:8081 --target http://target-sr:8081 --preserve-ids --workers 100
 srctl mode set READWRITE --global --url http://target-sr:8081
 ```

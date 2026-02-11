@@ -60,12 +60,14 @@ Use `srctl clone` with `--context` to scope each source into the target. See [Mi
 srctl clone \
   --url http://sr-team-a:8081 \
   --target-url http://consolidated-sr:8081 \
-  --context team-a
+  --context team-a \
+  --workers 100
 
 srctl clone \
   --url http://sr-team-b:8081 \
   --target-url http://consolidated-sr:8081 \
-  --context team-b
+  --context team-b \
+  --workers 100
 ```
 
 ### Step 5: Update Client Configurations
@@ -115,6 +117,6 @@ ksql.schema.registry.context.name=team-a
 
 - **Version requirement.** Contexts require Confluent Platform 7.0+ and compatible client libraries.
 - **Schema IDs are globally unique across contexts.** The same schema in two contexts gets two different IDs. Consumers must query with the correct context.
-- **ID preservation.** Schema IDs may differ between source and target after cloning. See [Migration via API](04-migration-via-api.md) for ID translation strategies.
+- **ID preservation with contexts.** When using `srctl clone` with `--context`, schema IDs from the source are preserved within the target context. The IDs are globally unique within the target SR instance, but the original source IDs are maintained. Consumers configured with the correct context will resolve the same IDs they used on the source.
 - **Coordination.** All affected teams must agree on timing and context naming. Keep source registries in read-only mode until cutover is verified. Migrate one source at a time.
 - **Cross-context references.** Schemas referencing schemas in another context require fully qualified subject names with context prefixes.
