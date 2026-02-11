@@ -37,13 +37,6 @@
 | `GET` | `/schemas/ids/{id}` | Get schema by global ID. |
 | `GET` | `/schemas/ids/{id}/subjects` | List subjects referencing a schema ID. |
 | `GET` | `/schemas` | List all schemas. Supports `?offset=` and `?limit=`. |
-| `POST` | `/exporters` | Create a schema exporter. |
-| `GET` | `/exporters` | List all exporters. |
-| `GET` | `/exporters/{name}/status` | Get exporter status (STARTING, RUNNING, PAUSED, ERROR). |
-| `PUT` | `/exporters/{name}/pause` | Pause an exporter. |
-| `PUT` | `/exporters/{name}/resume` | Resume an exporter. |
-| `PUT` | `/exporters/{name}/reset` | Reset an exporter. |
-| `DELETE` | `/exporters/{name}` | Delete an exporter. |
 | `GET` | `/contexts` | List all contexts (`:.context-name:` prefixes). |
 
 ---
@@ -111,8 +104,7 @@ Full docs: [https://github.com/akrishnanDG/srctl](https://github.com/akrishnanDG
 | **Version** | Sequential integer per schema registration under a subject. |
 | **Compatibility Level** | Evolution rule: BACKWARD, FORWARD, FULL, NONE. Set globally or per subject. |
 | **Context** | Namespace prefix (`:.name:subject`) for logical separation within one registry. |
-| **Schema Linking** | Continuous schema replication from source to destination SR via exporters. |
-| **Exporter** | Component that replicates schemas between registries. Can be paused, resumed, or reset. |
+| **Schema Linking** | Continuous schema replication between Confluent Platform SR instances (CP 7.x+ only; not available on community SR). |
 | **SerDe** | Serializer/Deserializer. SR-aware SerDes embed schema ID in the payload. |
 | **Wire Format** | Binary encoding: magic byte (`0x0`) + 4-byte schema ID + payload. |
 | **IMPORT Mode** | Allows registration with pre-assigned schema IDs for ID-preserving migration. |

@@ -48,12 +48,11 @@ Not sure which approach to use? See the **[Decision Tree](docs/01-overview.md#de
 |---|----------|-------------|
 | 1 | [Migration Overview](docs/01-overview.md) | Migration paths, decision tree, and high-level phases |
 | 2 | [Pre-Migration Assessment](docs/02-pre-migration-assessment.md) | Inventory, compatibility checks, and readiness analysis |
-| 3 | [Migration via Schema Exporter](docs/03-migration-via-exporter.md) | Using the built-in Exporter (Confluent Platform 7.x+) |
-| 4 | [Migration via srctl](docs/04-migration-via-api.md) | Migration using srctl clone, export/import, backup/restore |
-| 5 | [Multiple SRs & Contexts](docs/05-multi-sr-and-contexts.md) | Consolidating multiple Schema Registries using contexts |
-| 6 | [Post-Migration Validation](docs/06-post-migration-validation.md) | Verification, client reconfiguration, and cutover |
-| 7 | [Troubleshooting](docs/07-troubleshooting.md) | Common issues and resolutions |
-| 8 | [Appendix](docs/08-appendix.md) | API reference, configuration keys, limits, and glossary |
+| 3 | [Migration via srctl](docs/04-migration-via-api.md) | Migration using srctl clone, export/import, backup/restore |
+| 4 | [Multiple SRs & Contexts](docs/05-multi-sr-and-contexts.md) | Consolidating multiple Schema Registries using contexts |
+| 5 | [Post-Migration Validation](docs/06-post-migration-validation.md) | Verification, client reconfiguration, and cutover |
+| 6 | [Troubleshooting](docs/07-troubleshooting.md) | Common issues and resolutions |
+| 7 | [Appendix](docs/08-appendix.md) | API reference, configuration keys, limits, and glossary |
 
 ### AWS Glue SR Migration
 

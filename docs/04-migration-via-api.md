@@ -1,9 +1,8 @@
 # Migration via srctl
 
-Use `srctl` when you need a REST API-based migration — for example, when the
-built-in Schema Exporter is unavailable, you are crossing incompatible SR
-versions, migrating to Confluent Cloud, or you need selective control over which
-subjects to migrate.
+Use `srctl` for migrating schemas between Schema Registry instances — whether
+crossing SR versions, migrating to Confluent Cloud, or needing selective control
+over which subjects to migrate.
 
 `srctl` handles dependency ordering, ID preservation, IMPORT/READWRITE mode
 transitions, and error recovery automatically.

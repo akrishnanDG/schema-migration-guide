@@ -63,22 +63,7 @@ srctl import --from-dir ./export/ --target http://target-sr:8081
 
 ---
 
-## 5. Exporter Lag / Stuck Exporter
-
-**Problem:** Schema linking exporter shows increasing lag or errors in `srctl exporter status`.
-
-**Cause:** Network issues, auth failures, schema incompatibility, or target not in IMPORT mode.
-
-**Solution:** Inspect, then pause and resume the exporter:
-```bash
-srctl exporter status --name my-exporter --url http://source-sr:8081 --verbose
-srctl exporter pause --name my-exporter --url http://source-sr:8081
-srctl exporter resume --name my-exporter --url http://source-sr:8081
-```
-
----
-
-## 6. Authentication/Authorization Errors
+## 5. Authentication/Authorization Errors
 
 **Problem:** API calls return `401 Unauthorized` or `403 Forbidden`.
 
