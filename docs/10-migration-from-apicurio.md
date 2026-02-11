@@ -11,72 +11,102 @@ Migrate from Apicurio Registry to Confluent Schema Registry (Platform or Cloud) 
 | Schema organization | Artifact groups and artifact IDs | Subjects (optionally with contexts) |
 | Supported types | Avro, Protobuf, JSON Schema, OpenAPI, AsyncAPI, GraphQL | Avro, Protobuf, JSON Schema |
 | Compatibility rules | Per-artifact and global rules (validity + compatibility) | Per-subject and global compatibility levels |
-| REST API | `/apis/registry/v2/...` or `/apis/registry/v3/...` | `/subjects/...`, `/schemas/...` |
-| Wire format | Custom SerDe (content ID or global ID encoded differently) | Magic byte `0x0` + 4-byte schema ID |
+| Native REST API | `/apis/registry/v2` (2.x) or `/apis/registry/v3` (3.x) | `/subjects/...`, `/schemas/...` |
+| Confluent-compatible API | `/apis/ccompat/v6` (2.x), `/apis/ccompat/v7` and `/v8` (3.x) | Native |
 | Schema IDs | Global ID (int64) and content ID (int64) | Schema ID (int32) |
-
-### Wire Format and Dual-Read with Confluent Compatibility Mode
-
-By default, Apicurio SerDe uses its own wire format (8-byte global ID or content ID), which is incompatible with Confluent's wire format (magic byte `0x00` + 4-byte schema ID). However, Apicurio SerDe provides a **Confluent compatibility mode** that can enable dual-read during migration.
-
-**Apicurio's `apicurio.registry.as-confluent` property** configures the serializer/deserializer to use the Confluent-compatible 4-byte integer ID format instead of the default 8-byte long. When enabled, Apicurio SerDe reads and writes messages in a format the Confluent `KafkaAvroDeserializer` can understand.
-
-#### Migration Strategy: Dual-Read via Confluent Compatibility Mode
-
-If your Apicurio producers are currently using the **default wire format** (8-byte IDs), follow this phased approach:
-
-1. **Phase 1: Copy schemas** from Apicurio to Confluent SR (using `apicurio-to-confluent-sr`).
-2. **Phase 2: Switch consumers to Apicurio deserializer with Confluent compatibility mode.** Configure the Apicurio deserializer to point at the **Confluent SR** and enable Confluent-compatible ID handling:
-
-   ```java
-   // Use Apicurio deserializer with Confluent compatibility mode
-   props.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG,
-       "io.apicurio.registry.serde.avro.AvroKafkaDeserializer");
-   // Point at the new Confluent SR
-   props.put("apicurio.registry.url", "https://psrc-XXXXX.confluent.cloud/apis/ccompat/v7");
-   props.put("apicurio.registry.as-confluent", "true");
-   props.put("apicurio.auth.username", "<API_KEY>");
-   props.put("apicurio.auth.password", "<API_SECRET>");
-   ```
-
-   This consumer can read **both** existing messages (Apicurio 8-byte format) and new messages (Confluent 4-byte format) by detecting the ID format at the wire level.
-
-3. **Phase 3: Switch producers** to the Confluent `KafkaAvroSerializer` one at a time (same as the Glue migration pattern).
-4. **Phase 4: Switch consumers** to the standard Confluent `KafkaAvroDeserializer` once all producers are migrated and historical Apicurio-format messages are consumed.
-
-#### If Your Apicurio Producers Already Use Confluent Compatibility Mode
-
-If your Apicurio environment was already configured with `apicurio.registry.as-confluent=true`, the wire format is already Confluent-compatible. In this case:
-
-- Messages use the same 4-byte ID format as Confluent.
-- The Confluent `KafkaAvroDeserializer` can read these messages directly after schema migration.
-- Migration is straightforward: copy schemas, switch consumer config to Confluent SR, switch producer config to Confluent SR.
-
-#### Fallback: Planned Cutover (No Dual-Read)
-
-If the Apicurio `as-confluent` compatibility mode does not work for your environment (e.g., you use content IDs instead of global IDs, or your Apicurio version does not support it), the migration requires a planned cutover:
-
-- **Big-bang** -- All producers and consumers for a topic switch at the same time during a maintenance window.
-- **Blue-green** -- Deploy a parallel consumer group with Confluent SerDe, route traffic, then switch producers.
-- **Topic-by-topic** -- Migrate one topic at a time with a brief pause per topic.
-
-Plan your cutover strategy before starting the schema migration.
 
 ---
 
-## Apicurio v2 vs v3 Differences
+## Apicurio v2 vs v3: SerDe Defaults
 
-The tool supports both Apicurio Registry v2 and v3. Set `api_version` in your config accordingly.
+This is critical for migration planning — the defaults are very different between versions:
 
-| Aspect | Apicurio v2 | Apicurio v3 |
-|---|---|---|
-| API path | `/apis/registry/v2/...` | `/apis/registry/v3/...` |
-| Schema organization | Artifact groups + artifact IDs | Same, but adds group-level operations |
-| Content negotiation | Standard `Accept` headers | Different content negotiation; version-specific media types |
-| Listing artifacts | `GET /apis/registry/v2/search/artifacts` | `GET /apis/registry/v3/groups/{group}/artifacts` |
-| Config setting | `api_version: v2` | `api_version: v3` |
+| Aspect | Apicurio 2.x | Apicurio 3.x |
+|--------|-------------|-------------|
+| **Default ID size** | **8 bytes** (`DefaultIdHandler`) — NOT Confluent-compatible | **4 bytes** (`Default4ByteIdHandler`) — Confluent-compatible |
+| **Default ID type** | `globalId` | `contentId` |
+| **Headers mode** | `true` — ID sent in Kafka headers, NOT in payload | `false` — ID sent in payload (Confluent-compatible) |
+| **`as-confluent` property** | Available (`apicurio.registry.as-confluent=true`) | **Removed** — not needed since defaults are already Confluent-compatible |
+| **Confluent-compatible handler** | `Legacy4ByteIdHandler` (opt-in) | `Default4ByteIdHandler` (the default) |
+| **8-byte handler** | `DefaultIdHandler` (the default) | `Legacy8ByteIdHandler` (opt-in for backward compat) |
+| **Migration handler** | N/A | `OptimisticFallbackIdHandler` — reads both 4-byte and 8-byte |
+| **CCompat API** | v6, v7 | v7, v8 |
+| **Protobuf via ccompat** | Avro only | Avro, JSON Schema, Protobuf |
 
-Naming conventions differ between v2 and v3. For example, v3 has stricter group handling and different default behaviors for artifact metadata. Because of these differences, you **must** use the tool's `--dry-run` mode to generate the mapping and review it before migrating. Do not assume the mapping will be the same between v2 and v3 sources -- always verify.
+**Bottom line:** Apicurio 3.x is Confluent-compatible out of the box. Apicurio 2.x requires explicit configuration (`as-confluent=true` and `headers.enabled=false`) to produce Confluent-compatible wire format.
+
+---
+
+## Confluent SerDe Compatibility
+
+Apicurio Registry (both v2 and v3) exposes a **Confluent-compatible REST API** at `/apis/ccompat/v7`. Standard Confluent SerDes (`KafkaAvroSerializer` / `KafkaAvroDeserializer`) work directly against Apicurio by pointing `schema.registry.url` to the ccompat endpoint:
+
+```java
+// Confluent SerDes working against Apicurio Registry
+props.put("schema.registry.url", "http://apicurio-registry:8080/apis/ccompat/v7");
+```
+
+When using Confluent SerDes against Apicurio, messages use the standard Confluent wire format (`0x00` + 4-byte ID).
+
+---
+
+## Wire Format and Migration Strategies
+
+Your migration strategy depends on which SerDe and version your applications are currently using.
+
+### Scenario A: Applications already use Confluent SerDes against Apicurio (via ccompat API)
+
+Messages are already in Confluent wire format. Migration is: copy schemas → point `schema.registry.url` to Confluent SR → done. No wire format changes needed.
+
+### Scenario B: Apicurio 3.x with native SerDe (default config)
+
+3.x defaults are Confluent-compatible (4-byte IDs, payload-based). The Confluent `KafkaAvroDeserializer` can read these messages if you set `apicurio.registry.use-id=globalId` on the Apicurio serializer (since Confluent looks up schemas by globalId via the ccompat layer).
+
+**Dual-read during migration:** Use the Confluent `KafkaAvroDeserializer` pointed at the new Confluent SR. It can read both existing 3.x messages (4-byte, Confluent-compatible) and new Confluent-serialized messages. Migrate producers one at a time.
+
+### Scenario C: Apicurio 2.x with native SerDe (default config)
+
+This is the most complex case. The 2.x defaults are NOT Confluent-compatible:
+- IDs are 8 bytes (Confluent expects 4)
+- IDs are sent in Kafka headers (Confluent expects them in the payload)
+
+**Phase 1: Copy schemas** using `apicurio-to-confluent-sr`.
+
+**Phase 2: Switch consumers to Apicurio deserializer with Confluent compatibility mode.** Configure the Apicurio 2.x deserializer to read both old (8-byte, headers) and new (4-byte, payload) messages:
+
+```java
+// Apicurio 2.x deserializer with Confluent compatibility — reads BOTH formats
+props.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG,
+    "io.apicurio.registry.serde.avro.AvroKafkaDeserializer");
+props.put("apicurio.registry.url", "http://apicurio-registry:8080/apis/registry/v2");
+props.put("apicurio.registry.as-confluent", "true");
+```
+
+> **Note:** The Apicurio 2.x deserializer with `as-confluent=true` can read messages written with either the old 8-byte/headers format or the new 4-byte/payload format because it inspects the wire format at read time.
+
+**Phase 3: Switch producers** to Confluent `KafkaAvroSerializer` pointed at the new Confluent SR, one at a time:
+
+```java
+props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG,
+    "io.confluent.kafka.serializers.KafkaAvroSerializer");
+props.put("schema.registry.url", "https://psrc-XXXXX.confluent.cloud");
+props.put("basic.auth.credentials.source", "USER_INFO");
+props.put("basic.auth.user.info", "<API_KEY>:<API_SECRET>");
+```
+
+**Phase 4: Switch consumers** to Confluent `KafkaAvroDeserializer` once all producers are migrated and historical Apicurio-format messages are consumed.
+
+### Scenario D: Apicurio 2.x with `as-confluent=true` already enabled
+
+If your 2.x environment was already configured with `apicurio.registry.as-confluent=true` and `apicurio.registry.headers.enabled=false`, the wire format is already Confluent-compatible (4-byte, payload-based). Migration follows Scenario A — copy schemas, change URL.
+
+### Fallback: Planned cutover (no dual-read)
+
+If none of the above dual-read approaches work for your environment:
+
+- **Big-bang** — all producers and consumers for a topic switch simultaneously during a maintenance window.
+- **Blue-green** — deploy parallel consumer group with Confluent SerDe, switch traffic, then switch producers.
+- **Topic-by-topic** — migrate one topic at a time with a brief pause.
 
 ---
 
@@ -85,7 +115,7 @@ Naming conventions differ between v2 and v3. For example, v3 has stricter group 
 - [apicurio-to-confluent-sr](https://github.com/akrishnanDG/apicurio-to-confluent-sr) installed (`go build -o schema-migrate .`)
 - Network access to both Apicurio Registry and Confluent SR
 - Credentials for both registries (if auth is enabled)
-- A cutover plan for producers and consumers (see Wire Format section above)
+- Know which scenario above applies to your environment (check your current SerDe config)
 
 ---
 
@@ -109,7 +139,7 @@ confluent:
 
 ## Step 2: Dry Run -- Generate the Mapping
 
-This step is **essential**. Apicurio and Confluent have fundamentally different naming models (artifact groups/IDs vs. subjects), so the mapping between them is non-trivial and must be reviewed before any schemas are written to the destination.
+This step is **essential**. Apicurio and Confluent have fundamentally different naming models (artifact groups/IDs vs. subjects), so the mapping must be reviewed before any schemas are written. Naming conventions also differ between Apicurio v2 and v3, so always verify with `--dry-run` regardless of version.
 
 ```bash
 ./schema-migrate migrate --dry-run
@@ -117,86 +147,41 @@ This step is **essential**. Apicurio and Confluent have fundamentally different 
 
 This produces:
 
-1. A mapping table printed to stdout showing each Apicurio artifact and its proposed Confluent subject name.
+1. A mapping table showing each Apicurio artifact and its proposed Confluent subject name.
 2. A `mapping.json` file on disk.
-3. **Collision detection** -- if multiple Apicurio artifacts from different groups would map to the same Confluent subject, the tool flags them as collisions. These must be resolved before proceeding.
+3. **Collision detection** — if multiple artifacts from different groups map to the same subject.
 
 | Status | Meaning |
 |--------|---------|
 | `NEW` | Will be created in Confluent |
-| `EXISTS (same)` | Already exists with identical content -- skipped |
-| `EXISTS (different)` | Subject exists but content differs -- new version created |
-| `COLLISION` | Multiple artifacts map to the same subject -- must be resolved |
+| `EXISTS (same)` | Already exists with identical content — skipped |
+| `EXISTS (different)` | Subject exists but content differs — new version created |
+| `COLLISION` | Multiple artifacts map to the same subject — must be resolved |
 
 ---
 
 ## Step 3: Review the Mapping
 
-Open `mapping.json` and verify every entry. The file looks like this:
+Open `mapping.json` and verify every entry. Fix collisions using one of:
 
-```json
-[
-  {
-    "apicurio_group": "payments",
-    "apicurio_artifact_id": "OrderCreated",
-    "apicurio_versions": [1, 2, 3],
-    "confluent_subject": "OrderCreated-value",
-    "schema_type": "AVRO",
-    "status": "NEW"
-  },
-  {
-    "apicurio_group": "payments",
-    "apicurio_artifact_id": "OrderKey",
-    "apicurio_versions": [1],
-    "confluent_subject": "OrderKey-value",
-    "schema_type": "AVRO",
-    "status": "NEW"
-  }
-]
-```
+- **`topic_map` in config** — explicit subject names per artifact
+- **`--subject-format`** — Go template (e.g., `'{{.Group}}-{{.ArtifactId}}-{{.Type}}'`)
+- **Edit `mapping.json` directly** — change the `confluent_subject` field
 
-### Fixing Collisions
-
-If two artifacts from different groups produce the same subject name, you have several options:
-
-**Option 1: Use `topic_map` in config** to assign explicit subject names:
-
-```yaml
-mapping:
-  strategy: topic-name
-  topic_map:
-    payments/OrderCreated: payments-orders-value
-    inventory/OrderCreated: inventory-orders-value
-```
-
-**Option 2: Use `--subject-format`** to include the group in the subject name:
-
-```bash
-./schema-migrate migrate --dry-run --subject-format '{{.Group}}-{{.ArtifactId}}-{{.Type}}'
-```
-
-**Option 3: Edit `mapping.json` directly** -- change the `confluent_subject` field for colliding entries, then pass the file explicitly in Step 4.
-
-After fixing collisions, re-run `--dry-run` (or verify your edited `mapping.json`) to confirm no collisions remain.
+Re-run `--dry-run` after fixing to confirm no collisions remain.
 
 ---
 
 ## Step 4: Migrate
 
 ```bash
-# Using the reviewed mapping file (recommended)
 ./schema-migrate migrate --mapping-file mapping.json
 
-# Or using auto-generated mapping (if you reviewed it via --dry-run and made no edits)
-./schema-migrate migrate
-
-# For Confluent Cloud, add rate limiting to avoid HTTP 429 errors
+# For Confluent Cloud, add rate limiting
 ./schema-migrate migrate --mapping-file mapping.json --rate-limit 5
 ```
 
-The tool automatically handles **IMPORT mode** on the Confluent destination when it needs to preserve schema IDs. It enables IMPORT mode, registers the schema with the specified ID, and then disables IMPORT mode. This ensures schema IDs from Apicurio are preserved where possible, which simplifies client migration.
-
-Useful flags:
+The tool handles IMPORT mode on the destination automatically for ID preservation.
 
 | Flag | Purpose |
 |------|---------|
@@ -204,10 +189,10 @@ Useful flags:
 | `--copy-compatibility` | Copy compatibility levels from Apicurio (default: true) |
 | `--fail-fast` | Stop on first error |
 | `--rate-limit N` | Limit to N requests/sec (recommended for Cloud) |
-| `--subject-format` | Custom subject naming (Go template, e.g., `'{{.Group}}.{{.ArtifactId}}-{{.Type}}'`) |
-| `--mapping-file` | Path to a reviewed `mapping.json` from a prior `--dry-run` |
+| `--subject-format` | Custom subject naming (Go template) |
+| `--mapping-file` | Path to a reviewed `mapping.json` |
 
-The migration is idempotent -- re-running skips already-registered schemas and retries failures.
+The migration is idempotent — re-running skips already-registered schemas.
 
 ---
 
@@ -217,33 +202,24 @@ The migration is idempotent -- re-running skips already-registered schemas and r
 ./schema-migrate compare
 ```
 
-All entries should show `MATCH`. The tool uses Confluent's schema check API for semantic comparison (ignores whitespace and field ordering differences).
-
-If any entries show `MISMATCH`, investigate the specific schema. Common causes include Apicurio-specific schema features (like OpenAPI or AsyncAPI types that have no Confluent equivalent) or version ordering differences.
+All entries should show `MATCH` (semantic comparison via Confluent's schema check API).
 
 ---
 
 ## Step 6: Update Clients
 
-Switch producers and consumers from Apicurio SerDe to Confluent SerDe. This requires both a dependency change and a configuration change.
+Replace Apicurio SerDe with Confluent SerDe. See the [Wire Format and Migration Strategies](#wire-format-and-migration-strategies) section above for phased vs. cutover approaches.
 
-### Replace SerDe Libraries
-
-Remove the Apicurio SerDe dependency and add the Confluent equivalent.
-
-**Maven -- Before (Apicurio):**
+**Maven dependency change:**
 
 ```xml
+<!-- Remove -->
 <dependency>
     <groupId>io.apicurio</groupId>
     <artifactId>apicurio-registry-serdes-avro-serde</artifactId>
-    <version>2.x.x</version>
 </dependency>
-```
 
-**Maven -- After (Confluent):**
-
-```xml
+<!-- Add -->
 <dependency>
     <groupId>io.confluent</groupId>
     <artifactId>kafka-avro-serializer</artifactId>
@@ -251,25 +227,16 @@ Remove the Apicurio SerDe dependency and add the Confluent equivalent.
 </dependency>
 ```
 
-### Update Producer Configuration
-
-**Before (Apicurio SerDe):**
+**Producer config — before (Apicurio) → after (Confluent):**
 
 ```java
-props.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG,
-    "io.apicurio.registry.serde.avro.AvroKafkaSerializer");
+// Before
 props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG,
     "io.apicurio.registry.serde.avro.AvroKafkaSerializer");
-props.put("apicurio.registry.url", "https://your-apicurio-registry:8080/apis/registry/v2");
+props.put("apicurio.registry.url", "http://apicurio:8080/apis/registry/v2");
 props.put("apicurio.registry.auto-register", "true");
-props.put("apicurio.registry.artifact.group-id", "payments");
-```
 
-**After (Confluent SerDe):**
-
-```java
-props.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG,
-    "io.confluent.kafka.serializers.KafkaAvroSerializer");
+// After
 props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG,
     "io.confluent.kafka.serializers.KafkaAvroSerializer");
 props.put("schema.registry.url", "https://psrc-XXXXX.confluent.cloud");
@@ -278,19 +245,15 @@ props.put("basic.auth.user.info", "<API_KEY>:<API_SECRET>");
 props.put("auto.register.schemas", "true");
 ```
 
-### Update Consumer Configuration
-
-**Before (Apicurio SerDe):**
+**Consumer config — before (Apicurio) → after (Confluent):**
 
 ```java
+// Before
 props.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG,
     "io.apicurio.registry.serde.avro.AvroKafkaDeserializer");
-props.put("apicurio.registry.url", "https://your-apicurio-registry:8080/apis/registry/v2");
-```
+props.put("apicurio.registry.url", "http://apicurio:8080/apis/registry/v2");
 
-**After (Confluent SerDe):**
-
-```java
+// After
 props.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG,
     "io.confluent.kafka.serializers.KafkaAvroDeserializer");
 props.put("schema.registry.url", "https://psrc-XXXXX.confluent.cloud");
@@ -298,56 +261,35 @@ props.put("basic.auth.credentials.source", "USER_INFO");
 props.put("basic.auth.user.info", "<API_KEY>:<API_SECRET>");
 ```
 
-### Key Points
-
-- Remove all `apicurio.registry.*` properties from your configuration.
-- Verify that the `subject.name.strategy` on your Confluent serializers matches the subject names you chose during the mapping step.
-- Because there is no dual-read capability, **all producers and consumers for a given topic must switch at the same time** (see the Wire Format section above for cutover strategies).
+Remove all `apicurio.registry.*` properties.
 
 ---
 
-## Step 7: Lock Down the Source Registry
+## Step 7: Lock Down the Source
 
-After migration is complete and all clients are using Confluent SR:
-
-1. **Set Apicurio to read-only** -- configure Apicurio's `registry.readonly` mode or remove write permissions from all service accounts. This prevents accidental schema registration against the old registry.
-2. **Monitor for stragglers** -- watch Apicurio access logs for any clients still connecting. Track these down and migrate them.
-3. **Decommission** -- after a stabilization period (72+ hours with no Apicurio traffic), decommission the Apicurio instance and remove it from infrastructure-as-code.
-
----
-
-## Subject Name Mapping
-
-Apicurio organizes schemas by group/artifact; Confluent uses flat subjects. The tool supports several mapping strategies:
-
-- **Default** -- artifact ID becomes the subject name (e.g., `OrderCreated-value`)
-- **Topic map** -- explicit mapping in config:
-  ```yaml
-  mapping:
-    strategy: topic-name
-    topic_map:
-      payments/OrderCreated: orders
-      payments/OrderKey: orders
-  ```
-- **Custom format** -- Go template: `--subject-format '{{.Group}}-{{.ArtifactId}}-{{.Type}}'`
-- **Manual** -- edit `mapping.json` from a `--dry-run`
+1. **Set Apicurio to read-only** — configure `registry.readonly` mode or remove write permissions.
+2. **Monitor for stragglers** — watch Apicurio access logs for remaining connections.
+3. **Decommission** — after 72+ hours with no Apicurio traffic.
 
 ---
 
 ## Troubleshooting
 
-- **"Schema being registered is incompatible"** -- subject exists in Confluent with incompatible content. Temporarily set compatibility to `NONE` or use a different subject name in `mapping.json`.
-- **Subject name collisions** -- two Apicurio artifacts from different groups map to the same subject. Fix via `topic_map` in config, editing `mapping.json`, or using `--subject-format` with group prefix.
-- **Rate limiting (HTTP 429)** -- use `--rate-limit 5` for Confluent Cloud.
-- **IMPORT mode errors** -- the tool manages IMPORT mode automatically, but if another process is modifying the destination registry concurrently, IMPORT mode toggling may fail. Ensure no other schema operations are running during migration.
-- **Partial failure** -- re-run the migration. It is idempotent and will skip completed schemas.
-- **v2 vs v3 listing differences** -- if the tool reports fewer artifacts than expected, verify `api_version` in your config matches your Apicurio deployment version. A v2 tool config against a v3 registry (or vice versa) will produce incomplete results.
+- **"Schema being registered is incompatible"** — temporarily set compatibility to `NONE` on the target, or use a different subject name.
+- **Subject name collisions** — fix via `topic_map`, `--subject-format`, or `mapping.json` edits.
+- **Rate limiting (HTTP 429)** — use `--rate-limit 5` for Confluent Cloud.
+- **IMPORT mode errors** — the tool handles this automatically, but ensure no other process is modifying the target concurrently.
+- **Partial failure** — re-run; idempotent.
+- **v2 vs v3 listing differences** — verify `api_version` in config matches your Apicurio version.
+- **Consumer deserialization errors after migration** — check which wire format scenario applies. If 2.x with default config, use `as-confluent=true` for dual-read during transition.
+- **Headers-mode messages** — if Apicurio 2.x was running with default `headers.enabled=true`, the Confluent deserializer cannot read these messages. Use the Apicurio deserializer with `as-confluent=true` as a bridge during migration.
 
 ---
 
 ## References
 
-- [apicurio-to-confluent-sr](https://github.com/akrishnanDG/apicurio-to-confluent-sr) -- Migration tool
+- [apicurio-to-confluent-sr](https://github.com/akrishnanDG/apicurio-to-confluent-sr) — Migration tool
+- [Apicurio ccompat API docs](https://www.apicur.io/registry/docs/apicurio-registry/2.6.x/getting-started/assembly-confluent-schema-registry-compatibility.html)
 - [Post-Migration Validation](06-post-migration-validation.md)
-- [Multiple SRs & Contexts](05-multi-sr-and-contexts.md) -- if the target already has schemas
+- [Multiple SRs & Contexts](05-multi-sr-and-contexts.md) — if the target already has schemas
 - [Troubleshooting](07-troubleshooting.md)
