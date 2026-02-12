@@ -145,9 +145,13 @@ props.put("schema.registry.url", "https://psrc-XXXXX.confluent.cloud");
 props.put("basic.auth.credentials.source", "USER_INFO");
 props.put("basic.auth.user.info", "<API_KEY>:<API_SECRET>");
 props.put("auto.register.schemas", "true");
+// Must match the naming strategy used during migration
+// Confluent defaults to TopicNameStrategy — set this if you used RecordNameStrategy
+props.put("value.subject.name.strategy",
+    "io.confluent.kafka.serializers.subject.RecordNameStrategy");
 ```
 
-Remove all `apicurio.registry.*` properties.
+Remove all `apicurio.registry.*` properties. Set `value.subject.name.strategy` (and `key.subject.name.strategy` if applicable) to match the subject naming you chose during the mapping step. If you used the default `TopicNameStrategy`, this property can be omitted.
 
 ## Step 6: Lock Down Source
 

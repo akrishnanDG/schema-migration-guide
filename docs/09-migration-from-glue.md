@@ -198,6 +198,10 @@ props.put("schema.registry.url", "https://psrc-XXXXX.us-east-1.aws.confluent.clo
 props.put("basic.auth.credentials.source", "USER_INFO");
 props.put("basic.auth.user.info", "<API_KEY>:<API_SECRET>");
 props.put("auto.register.schemas", "true");
+// If you used RecordNameStrategy or TopicRecordNameStrategy during migration,
+// you MUST set this — Confluent defaults to TopicNameStrategy
+props.put("value.subject.name.strategy",
+    "io.confluent.kafka.serializers.subject.RecordNameStrategy");
 ```
 
 **Rollout order:** low-volume/non-critical producers first, then medium-volume, then high-volume. After each switch, verify consumers are deserializing successfully with no errors in logs.
@@ -233,6 +237,9 @@ props.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG,
 props.put("schema.registry.url", "https://psrc-XXXXX.us-east-1.aws.confluent.cloud");
 props.put("basic.auth.credentials.source", "USER_INFO");
 props.put("basic.auth.user.info", "<API_KEY>:<API_SECRET>");
+// Must match the strategy used during migration (if not TopicNameStrategy)
+props.put("value.subject.name.strategy",
+    "io.confluent.kafka.serializers.subject.RecordNameStrategy");
 ```
 
 Remove all `AWSSchemaRegistryConstants.*` properties, the `secondary.deserializer` property, and the Glue SR library dependency from your build configuration.
