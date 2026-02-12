@@ -37,26 +37,13 @@ This is critical for migration planning — the defaults are very different betw
 
 ---
 
-## Confluent SerDe Compatibility
-
-Apicurio Registry (both v2 and v3) exposes a **Confluent-compatible REST API** at `/apis/ccompat/v7`. Standard Confluent SerDes (`KafkaAvroSerializer` / `KafkaAvroDeserializer`) work directly against Apicurio by pointing `schema.registry.url` to the ccompat endpoint:
-
-```java
-// Confluent SerDes working against Apicurio Registry
-props.put("schema.registry.url", "http://apicurio-registry:8080/apis/ccompat/v7");
-```
-
-When using Confluent SerDes against Apicurio, messages use the standard Confluent wire format (`0x00` + 4-byte ID).
-
----
-
 ## Wire Format and Migration Strategies
 
-Your migration strategy depends on which SerDe and version your applications are currently using.
+Your migration strategy depends on which SerDe and version your applications are currently using. Check your client configurations to determine which scenario applies.
 
 ### Scenario A: Applications already use Confluent SerDes against Apicurio (via ccompat API)
 
-Messages are already in Confluent wire format. Migration is: copy schemas → point `schema.registry.url` to Confluent SR → done. No wire format changes needed.
+Some Apicurio deployments use the standard Confluent `KafkaAvroSerializer`/`KafkaAvroDeserializer` against Apicurio's Confluent-compatible API (`/apis/ccompat/v7`). If this is your setup, messages are already in Confluent wire format (`0x00` + 4-byte ID). Migration is: copy schemas → change `schema.registry.url` from Apicurio's ccompat endpoint to the Confluent SR URL → done. No wire format or SerDe changes needed.
 
 ### Scenario B: Apicurio 3.x with native SerDe (default config)
 
