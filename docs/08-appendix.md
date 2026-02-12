@@ -100,7 +100,7 @@ Full docs: [https://github.com/akrishnanDG/srctl](https://github.com/akrishnanDG
 | **Version** | Sequential integer per schema registration under a subject. |
 | **Compatibility Level** | Evolution rule: BACKWARD, FORWARD, FULL, NONE. Set globally or per subject. |
 | **Context** | Namespace prefix (`:.name:subject`) for logical separation within one registry. |
-| **Schema Linking** | Continuous schema replication between Confluent Platform SR instances (CP 7.x+ only; not available on community SR). |
+| **Schema Linking** | Continuous schema replication between CP Enterprise SR instances (CP Enterprise only; not available on CP Community). |
 | **SerDe** | Serializer/Deserializer. SR-aware SerDes embed schema ID in the payload. |
 | **Wire Format** | Binary encoding: magic byte (`0x0`) + 4-byte schema ID + payload. |
 | **IMPORT Mode** | Allows registration with pre-assigned schema IDs for ID-preserving migration. |

@@ -71,10 +71,10 @@ srctl import --from-dir ./export/ --target http://target-sr:8081 --workers 100
 
 **Solution:** Verify credentials and pass them to srctl:
 ```bash
-srctl subjects list --url http://target-sr:8081 --auth-key <API_KEY> --auth-secret <API_SECRET>
+srctl subjects list --url http://target-sr:8081 --username <API_KEY> --password <API_SECRET>
 # Or use environment variables:
-export SRCTL_TARGET_AUTH_KEY="your-api-key"
-export SRCTL_TARGET_AUTH_SECRET="your-api-secret"
+export SRCTL_TARGET_USERNAME="your-api-key"
+export SRCTL_TARGET_PASSWORD="your-api-secret"
 ```
 
 ---
@@ -137,7 +137,7 @@ srctl mode set READWRITE --global --url http://target-sr:8081
 **Solution:** Reduce workers and add request delays:
 ```bash
 srctl import --source http://source-sr:8081 --target https://psrc-xxxxx.confluent.cloud \
-  --workers 3 --request-delay 500ms --auth-key <API_KEY> --auth-secret <API_SECRET>
+  --workers 3 --request-delay 500ms --username <API_KEY> --password <API_SECRET>
 ```
 
 ---

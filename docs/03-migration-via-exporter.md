@@ -15,8 +15,8 @@ Registry to a remote target such as Confluent Cloud.
   this feature is not available in CP Community or open-source Schema Registry)
   and you are migrating to Confluent Cloud Schema Registry.
 - **NOT available** when the source is CP Community or open-source Schema
-  Registry. If your source is OSS, use `srctl clone` instead (see
-  `02-migration-via-srctl.md`).
+  Registry. If your source is CP Community, use `srctl clone` instead (see
+  [Migration via srctl](04-migration-via-api.md)).
 - For one-time bulk migrations from CP Enterprise, `srctl clone` also works.
   Schema Exporter is preferred when you need continuous sync during a longer
   cutover window.
@@ -48,14 +48,14 @@ srctl mode set IMPORT --global \
 The exporter API is a CP Enterprise REST endpoint, so use `curl` directly
 against the source Schema Registry.
 
-To export all schemas across all contexts, use `:.* :` as the subject pattern:
+To export all schemas across all contexts, use `:.*:` as the subject pattern:
 
 ```bash
 curl -X PUT -H "Content-Type: application/json" \
   --data '{
     "name": "cloud-migration",
     "contextType": "AUTO",
-    "subjects": [":.* :"],
+    "subjects": [":.*:"],
     "config": {
       "schema.registry.url": "https://psrc-XXXXX.confluent.cloud",
       "basic.auth.credentials.source": "USER_INFO",
@@ -65,7 +65,7 @@ curl -X PUT -H "Content-Type: application/json" \
   http://source-cp-sr:8081/exporters
 ```
 
-- `subjects: [":.* :"]` exports every subject across all contexts. Replace
+- `subjects: [":.*:"]` exports every subject across all contexts. Replace
   with a specific list (e.g., `["my-topic-value"]`) to export only a subset,
   or use `["*"]` if you only need subjects in the default context.
 - `contextType: AUTO` maps subjects one-to-one (no prefix added on the target).
@@ -148,7 +148,7 @@ context name:
 {
   "contextType": "CUSTOM",
   "context": ":.from-onprem:",
-  "subjects": [":.* :"],
+  "subjects": [":.*:"],
   "config": { "..." }
 }
 ```

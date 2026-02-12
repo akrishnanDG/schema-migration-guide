@@ -110,6 +110,8 @@ glue-to-ccsr migrate --config config.yaml --dry-run
 glue-to-ccsr migrate --config config.yaml
 ```
 
+`glue-to-ccsr` handles IMPORT mode on the destination automatically for ID preservation.
+
 ### Validation After Schema Copy
 
 After the copy completes, verify the schemas arrived correctly:
@@ -118,7 +120,8 @@ After the copy completes, verify the schemas arrived correctly:
 # Check subject count on the target
 srctl stats \
   --url https://psrc-XXXXX.confluent.cloud \
-  --username <KEY> --password <SECRET>
+  --username <KEY> --password <SECRET> \
+  --workers 100
 ```
 
 Compare subject counts. Note that one Glue schema may produce both `-key` and `-value` subjects on the Confluent side. Spot-check a few subjects by retrieving the latest schema version and comparing it to the original Glue schema to confirm fidelity.

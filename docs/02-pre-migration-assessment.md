@@ -90,14 +90,4 @@ For on-prem to Cloud migrations, ensure outbound HTTPS (443) is allowed to `*.co
 
 ---
 
-## Post-Migration: Lock Down the Source
-
-After the migration is complete, validated, and clients are pointed to the new registry:
-
-1. **Set source to READONLY** -- prevents any further schema registrations on the old registry.
-2. **Update CI/CD pipelines** -- point all schema-registering pipelines (CI/CD, Kafka Connect schema auto-registration, etc.) to the new registry.
-3. **Decommission timeline** -- keep the source registry running in READONLY for 48-72 hours as a rollback safety net before decommissioning.
-
----
-
 Once all blocking issues (oversized schemas, dangling references) are resolved, proceed to [Migration via srctl](04-migration-via-api.md).

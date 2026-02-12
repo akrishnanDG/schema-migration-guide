@@ -32,14 +32,14 @@ If the target registry is empty and you are migrating from a single source, cont
 ### Step 1: Inventory Source Registries
 
 ```bash
-srctl stats --url http://sr-team-a:8081
-srctl stats --url http://sr-team-b:8081
+srctl stats --url http://sr-team-a:8081 --workers 100
+srctl stats --url http://sr-team-b:8081 --workers 100
 ```
 
 ### Step 2: Check for Subject Name Collisions
 
 ```bash
-srctl compare --url http://sr-team-a:8081 --target-url http://sr-team-b:8081
+srctl compare --url http://sr-team-a:8081 --target-url http://sr-team-b:8081 --workers 100
 ```
 
 Collisions are safe with contexts (`:.team-a:orders-value` and `:.team-b:orders-value` are distinct).
@@ -54,7 +54,7 @@ Collisions are safe with contexts (`:.team-a:orders-value` and `:.team-b:orders-
 
 ### Step 4: Migrate Each Source SR into Its Own Context
 
-Use `srctl clone` with `--context` to scope each source into the target. See [Migration via API](04-migration-via-api.md) for mechanics.
+Use `srctl clone` with `--context` to scope each source into the target. `srctl clone` handles IMPORT mode on the destination automatically. See [Migration via srctl](04-migration-via-api.md) for details.
 
 ```bash
 srctl clone \
@@ -115,7 +115,7 @@ ksql.schema.registry.context.name=team-a
 
 ## Limitations
 
-- **Version requirement.** Contexts require Confluent Platform 7.0+ and compatible client libraries.
+- **Version requirement.** Contexts require CP Enterprise 7.0+ (or Confluent Cloud) and compatible client libraries.
 - **Schema IDs are globally unique across contexts.** The same schema in two contexts gets two different IDs. Consumers must query with the correct context.
 - **ID preservation with contexts.** When using `srctl clone` with `--context`, schema IDs from the source are preserved within the target context. The IDs are globally unique within the target SR instance, but the original source IDs are maintained. Consumers configured with the correct context will resolve the same IDs they used on the source.
 - **Coordination.** All affected teams must agree on timing and context naming. Keep source registries in read-only mode until cutover is verified. Migrate one source at a time.

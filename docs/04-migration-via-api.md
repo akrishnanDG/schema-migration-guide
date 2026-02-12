@@ -51,7 +51,7 @@ importing.
 
 ```bash
 # Phase 1 -- export from source
-srctl export --url http://source-sr:8081 --output schemas.tar.gz
+srctl export --url http://source-sr:8081 --output schemas.tar.gz --workers 100
 
 # Phase 2 -- import to target
 srctl import \
@@ -67,7 +67,7 @@ you can restore a registry to a known good state.
 
 ```bash
 # Backup
-srctl backup --url http://source-sr:8081 --output full-backup.tar.gz
+srctl backup --url http://source-sr:8081 --output full-backup.tar.gz --workers 100
 
 # Restore
 srctl restore \
@@ -109,7 +109,7 @@ After the clone completes, set the source registry to READONLY to prevent
 further schema changes while you cut over clients:
 
 ```bash
-srctl mode --url http://source-sr:8081 --set READONLY
+srctl mode set READONLY --global --url http://source-sr:8081 --workers 100
 ```
 
 ### 3. Point CI/CD and schema-registering clients to the new registry
@@ -154,9 +154,8 @@ conflicts before making changes.
 via `confluent schema-registry cluster describe`.
 
 **Rate limits.** Confluent Cloud enforces API rate limits. `srctl` retries
-automatically with backoff on HTTP 429 responses. Use a moderate `--workers`
-value (4-8) for large registries. Contact Confluent support for a temporary
-limit increase during large migrations.
+automatically with backoff on HTTP 429 responses. Use `--workers 100` by default;
+reduce to `--workers 5` if you encounter persistent rate limiting (HTTP 429).
 
 **IMPORT mode permissions.** Your API key must have the **ResourceOwner** role
 binding on the SR cluster to toggle IMPORT mode. Standard DeveloperRead/Write

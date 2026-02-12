@@ -30,17 +30,18 @@ For Apicurio migrations:
 
 ```bash
 # 1. Assess your current environment
-srctl stats --url http://source-sr:8081
+srctl stats --url http://source-sr:8081 --workers 100
 
 # 2. Migrate (one command)
 srctl clone \
   --url http://source-sr:8081 \
   --target-url https://target-sr.confluent.cloud \
   --target-username <API_KEY> \
-  --target-password <API_SECRET>
+  --target-password <API_SECRET> \
+  --workers 100
 
 # 3. Validate
-srctl compare --url http://source-sr:8081 --target-url https://target-sr.confluent.cloud
+srctl compare --url http://source-sr:8081 --target-url https://target-sr.confluent.cloud --workers 100
 
 # 4. Cut over clients to the new Schema Registry
 ```

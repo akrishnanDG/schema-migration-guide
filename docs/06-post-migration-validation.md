@@ -27,7 +27,8 @@ After `srctl clone` completes, confirm the destination registry is in READWRITE 
 ```bash
 srctl mode get --global \
   --url https://target-sr.confluent.cloud \
-  --username <API_KEY> --password <API_SECRET>
+  --username <API_KEY> --password <API_SECRET> \
+  --workers 100
 ```
 
 If the mode is still IMPORT, set it to READWRITE before proceeding:
@@ -35,7 +36,8 @@ If the mode is still IMPORT, set it to READWRITE before proceeding:
 ```bash
 srctl mode set READWRITE --global \
   --url https://target-sr.confluent.cloud \
-  --username <API_KEY> --password <API_SECRET>
+  --username <API_KEY> --password <API_SECRET> \
+  --workers 100
 ```
 
 ---
@@ -120,8 +122,8 @@ After `srctl clone` completes and `srctl compare` passes, perform a one-time cut
 
 4. **Update producer and consumer configs** to read from the new registry. Roll out in batches, starting with low-risk applications. Monitor error rates between batches. See section 2 above for the client configuration properties.
 
-5. **Keep the source registry running in READONLY for 72 hours** as a rollback window. During this period, monitor all clients for schema resolution errors. Run a final `srctl compare` at the end of the window to confirm no drift.
+5. **Keep the source registry running in READONLY for 72+ hours** as a rollback window. During this period, monitor all clients for schema resolution errors. Run a final `srctl compare` at the end of the window to confirm no drift.
 
 **To roll back**, revert client configurations to point at the source registry and restart affected services. If new schema versions were registered on the target after cutover, register them on the source before completing the rollback to prevent deserialization failures. Set the source back to READWRITE and the target back to READONLY (or IMPORT) as needed.
 
-After 72 hours with no issues and a clean final `srctl compare`, decommission the source registry.
+After 72+ hours with no issues and a clean final `srctl compare`, decommission the source registry.

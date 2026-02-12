@@ -140,7 +140,7 @@ After a one-time copy with `srctl clone`, cutover is straightforward:
 1. **Set source to READONLY** -- prevents further schema registrations on the old registry.
 2. **Set destination to READWRITE** -- `srctl clone` does this automatically, but verify the mode is correct.
 3. **Update client configurations** -- point all producers, consumers, Connect workers, ksqlDB, and Kafka Streams applications to the new registry URL and credentials.
-4. **Monitor** -- watch for errors in both registries for 48-72 hours. Keep the source in READONLY as a rollback safety net; if issues arise, revert client configs to point back to the source.
+4. **Monitor** -- watch for errors in both registries for 72+ hours. Keep the source in READONLY as a rollback safety net; if issues arise, revert client configs to point back to the source.
 
 See [Post-Migration Validation](06-post-migration-validation.md).
 
