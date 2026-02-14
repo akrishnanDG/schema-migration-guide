@@ -15,8 +15,9 @@ Registry to a remote target such as Confluent Cloud.
   this feature is not available in CP Community or open-source Schema Registry)
   and you are migrating to Confluent Cloud Schema Registry.
 - **NOT available** when the source is CP Community or open-source Schema
-  Registry. If your source is CP Community, use `srctl clone` instead (see
-  [Migration via srctl](04-migration-via-api.md)).
+  Registry. If your source is CP Community and you need continuous sync, use
+  `srctl replicate` instead (see [Migration via srctl — Continuous Replication](04-migration-via-api.md#continuous-replication-with-srctl-replicate)).
+  For one-time migration, use `srctl clone` (see [Migration via srctl](04-migration-via-api.md)).
 - For one-time bulk migrations from CP Enterprise, `srctl clone` also works.
   Schema Exporter is preferred when you need continuous sync during a longer
   cutover window.

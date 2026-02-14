@@ -11,7 +11,7 @@ Migrate to **Confluent Platform Schema Registry** or **Confluent Cloud Schema Re
 
 | Tool | Purpose |
 |------|---------|
-| [`srctl`](https://github.com/akrishnanDG/srctl) | Primary CLI for SR operations — export, import, clone, compare, validate, split |
+| [`srctl`](https://github.com/akrishnanDG/srctl) | Primary CLI for SR operations — export, import, clone, compare, replicate, validate, split |
 | `confluent` CLI | Confluent Cloud operations (Cloud migrations only) |
 
 For AWS Glue migrations:
@@ -32,13 +32,16 @@ For Apicurio migrations:
 # 1. Assess your current environment
 srctl stats --url http://source-sr:8081 --workers 100
 
-# 2. Migrate (one command)
+# 2a. One-time migration
 srctl clone \
   --url http://source-sr:8081 \
   --target-url https://target-sr.confluent.cloud \
   --target-username <API_KEY> \
   --target-password <API_SECRET> \
   --workers 100
+
+# 2b. OR continuous replication (real-time sync via _schemas topic)
+srctl replicate --source on-prem --target ccloud --kafka-brokers broker1:9092
 
 # 3. Validate
 srctl compare --url http://source-sr:8081 --target-url https://target-sr.confluent.cloud --workers 100
@@ -84,7 +87,7 @@ Not sure which approach to use? See the **[Decision Tree](docs/01-overview.md#de
 
 | Tool | Source | Purpose |
 |------|--------|---------|
-| [srctl](https://github.com/akrishnanDG/srctl) | CLI (Go) | Schema Registry operations — export, import, clone, compare, split, validate |
+| [srctl](https://github.com/akrishnanDG/srctl) | CLI (Go) | Schema Registry operations — export, import, clone, compare, replicate, split, validate |
 | [glue-to-ccsr](https://github.com/akrishnanDG/glue-to-ccsr) | CLI (Go) | One-time schema copy from AWS Glue SR to Confluent Cloud SR |
 | [aws-glue-confluent-sr-migration-demo](https://github.com/akrishnanDG/aws-glue-confluent-sr-migration-demo) | Java Demo | Zero-downtime migration demo using `secondary.deserializer` |
 | [apicurio-to-confluent-sr](https://github.com/akrishnanDG/apicurio-to-confluent-sr) | CLI (Go) | Migrate schemas from Apicurio Registry to Confluent SR |

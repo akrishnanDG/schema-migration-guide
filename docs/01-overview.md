@@ -37,8 +37,8 @@ The Community Schema Registry serves basic needs but lacks the capabilities orga
 |---|---|
 | **Deployment** | Fully managed by Confluent |
 | **Best for** | Reducing operational overhead; cloud-native Kafka adoption |
-| **Tooling** | `srctl clone` (recommended) |
-| **ID Preservation** | Handled automatically by `srctl clone` |
+| **Tooling** | `srctl clone` (one-time), `srctl replicate` (continuous sync) |
+| **ID Preservation** | Handled automatically by both `srctl clone` and `srctl replicate` |
 
 ### Path 3: CP Enterprise SR to Confluent Cloud SR
 
@@ -64,26 +64,35 @@ START
   Yes                     No (CP Community)
   |                       |
   v                       v
-[Use Schema Exporter    [Single source SR,
- for continuous sync     or multiple?]
+[Use Schema Exporter    [Need continuous sync
+ for continuous sync     during cutover?]
  to Cloud, or srctl       |              |
- clone for one-time       Single       Multiple
+ clone for one-time       Yes            No
  copy]                    |              |
                           v              v
-                        [Use srctl     [Consolidating into
-                         clone]         a single target?]
-                                         |         |
-                                         Yes       No
-                                         |         |
-                                         v         v
-                                        Use       Migrate each
-                                        srctl     independently
-                                        clone     (single-source
-                                        with       flow per SR)
-                                        --context
+                        [Use srctl     [Single source SR,
+                         replicate]     or multiple?]
+                                         |              |
+                                         Single       Multiple
+                                         |              |
+                                         v              v
+                                        [Use srctl     [Consolidating into
+                                         clone]         a single target?]
+                                                         |         |
+                                                         Yes       No
+                                                         |         |
+                                                         v         v
+                                                        Use       Migrate each
+                                                        srctl     independently
+                                                        clone     (single-source
+                                                        with       flow per SR)
+                                                        --context
 ```
 
-`srctl clone` is the recommended approach for all CP Community migration scenarios. It handles dependency ordering, ID preservation, and mode transitions automatically.
+**Choosing between `srctl clone` and `srctl replicate`:**
+
+- **`srctl clone`** -- One-time copy. Best for simple migrations where you can coordinate a single cutover window. Handles dependency ordering, ID preservation, and mode transitions automatically.
+- **`srctl replicate`** -- Continuous, real-time replication by consuming the `_schemas` Kafka topic. Best for migrations that require a gradual rollout, where new schemas continue to be registered on the source during the migration window. Works with any source (CP Community, CP Enterprise, or self-managed). See [Migration via srctl](04-migration-via-api.md#continuous-replication-with-srctl-replicate).
 
 ### srctl clone
 
@@ -106,6 +115,18 @@ srctl clone \
 > **Note:** `srctl clone` automatically sets the destination to IMPORT mode before copying and restores it to READWRITE after. For manual migrations (e.g., using the REST API directly), you must set the destination to IMPORT mode before copying schemas and switch it to READWRITE after the copy is complete.
 
 For air-gapped environments where the migration host cannot reach both registries simultaneously, `srctl export` + `srctl import` provides a two-phase alternative (export to disk, transfer files, then import). For full state replication including configs, modes, and tags, `srctl backup` + `srctl restore` is available. See [Migration via srctl](04-migration-via-api.md) for details on these alternatives.
+
+### srctl replicate (Continuous Replication)
+
+Available for **any source** (CP Community, CP Enterprise, or self-managed). Consumes the source cluster's `_schemas` Kafka topic for real-time change detection and applies changes to the target via REST API. Runs as a long-running process with monitoring (CLI status + Prometheus metrics).
+
+**Use when:** you need continuous sync during a longer cutover window, schemas are still being registered on the source during migration, or you want a gradual client rollout. Works with all source SR types -- no Enterprise license required.
+
+```bash
+srctl replicate --source on-prem --target ccloud --kafka-brokers broker1:9092
+```
+
+See [Migration via srctl — Continuous Replication](04-migration-via-api.md#continuous-replication-with-srctl-replicate) for full details.
 
 ### Schema Exporter (CP Enterprise to Cloud)
 
@@ -159,6 +180,8 @@ For organizations that need a gradual rollout of client changes (e.g., hundreds 
 **Canary:** Migrate a subset of applications first, monitor for issues, then gradually migrate the rest. Limits blast radius but extends the migration window.
 
 These strategies apply to how you roll out client configuration changes, not to the schema copy itself -- the schema copy via `srctl clone` is always a single operation.
+
+**Continuous replication:** For organizations that cannot freeze schema registrations during migration, `srctl replicate` provides a continuous sync option. The replicator runs alongside normal operations, consuming the `_schemas` topic in real-time. New schemas registered on the source automatically appear on the target. When ready, set the source to READONLY and cut over clients. This eliminates the need for a coordinated "big bang" cutover. See [Migration via srctl — Continuous Replication](04-migration-via-api.md#continuous-replication-with-srctl-replicate).
 
 ---
 

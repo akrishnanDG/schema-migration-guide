@@ -82,7 +82,128 @@ Additional flags: `--restore-configs`, `--restore-modes`.
 
 ---
 
-## Migration Flow
+<a id="continuous-replication-with-srctl-replicate"></a>
+
+## Continuous Replication with `srctl replicate`
+
+For migrations that require continuous sync -- where schemas are still being registered on the source during the migration window -- use `srctl replicate` instead of `srctl clone`.
+
+`srctl replicate` is a long-running process that consumes the source cluster's `_schemas` Kafka topic and applies every change to the target in real-time. It works with **any source** (CP Community, CP Enterprise, or self-managed) -- no Enterprise license required.
+
+### When to use `replicate` vs `clone`
+
+| Scenario | Use |
+|---|---|
+| Simple migration, can freeze schema registrations during cutover | `srctl clone` |
+| Schemas are still being registered on the source during migration | `srctl replicate` |
+| Gradual client rollout over days/weeks | `srctl replicate` |
+| Source is CP Community and you need continuous sync (Schema Exporter is CP Enterprise only) | `srctl replicate` |
+| Air-gapped environment (no Kafka access from migration host) | `srctl clone` or `export/import` |
+
+### Setup
+
+Configure both registries in `~/.srctl/srctl.yaml`, including Kafka connection details for the source:
+
+```yaml
+registries:
+  - name: on-prem
+    url: http://source-sr:8081
+    kafka:
+      brokers:
+        - broker1:9092
+        - broker2:9092
+      sasl:
+        mechanism: PLAIN
+        username: kafka-user
+        password: kafka-pass
+      tls:
+        enabled: true
+
+  - name: ccloud
+    url: https://psrc-xxxxx.confluent.cloud
+    username: <API_KEY>
+    password: <API_SECRET>
+    context: .migrated    # Optional: replicate into a specific context
+```
+
+### Start replication
+
+```bash
+# Basic (Kafka config from srctl.yaml)
+srctl replicate --source on-prem --target ccloud
+
+# With explicit Kafka brokers
+srctl replicate --source on-prem --target ccloud \
+  --kafka-brokers broker1:9092,broker2:9092
+
+# With subject filtering (only replicate matching subjects)
+srctl replicate --source on-prem --target ccloud --filter "user-*"
+
+# With Prometheus monitoring
+srctl replicate --source on-prem --target ccloud --metrics-port 9090
+```
+
+On first run, the replicator performs a full initial sync (equivalent to `srctl clone`), then switches to streaming mode for real-time replication. On subsequent runs with `--no-initial-sync`, it resumes from the last committed Kafka consumer group offset.
+
+### What gets replicated
+
+| Source event | Target action |
+|---|---|
+| New schema version | Registered on target |
+| Schema deletion | Deleted on target |
+| Compatibility config change | Applied (global and subject-level) |
+| Subject mode change | Applied (subject-level only) |
+
+### Monitoring
+
+**CLI status** -- Periodic one-line status printed to terminal (configurable with `--status-interval`):
+
+```
+[15:42:14] on-prem -> ccloud | schemas=142 configs=8 deletes=2 errors=0 events=1523 filtered=45 offset=1568 uptime=2h15m
+```
+
+**Prometheus metrics** -- Enable with `--metrics-port`. Key metrics for alerting:
+
+| Metric | Alert on |
+|---|---|
+| `srctl_replicate_errors_total` | Rate > 0 for 5+ minutes |
+| `srctl_replicate_events_processed_total` | No change for 10+ minutes (stalled) |
+| `srctl_replicate_uptime_seconds` | Drops to 0 (replicator down) |
+
+### Retry and resilience
+
+- Events retry up to 10 times with exponential backoff (1s → 30s cap)
+- Offsets are only committed when the entire batch succeeds
+- On restart, uncommitted events are replayed automatically
+- Network errors and 5xx responses are retried; client errors (400, 422) fail immediately
+
+### Cutover from continuous replication
+
+1. **Verify replication is caught up** -- Check the CLI status or Prometheus metrics. The offset should be stable with no errors.
+2. **Set the source to READONLY**:
+   ```bash
+   srctl mode set READONLY --global --url http://source-sr:8081
+   ```
+3. **Wait for the replicator to drain** -- The replicator will process the READONLY mode event and any remaining schemas.
+4. **Validate**:
+   ```bash
+   srctl compare \
+     --url http://source-sr:8081 \
+     --target-url https://psrc-xxxxx.confluent.cloud \
+     --target-username <API_KEY> --target-password <API_SECRET> \
+     --workers 100
+   ```
+5. **Stop the replicator** -- Send SIGINT (Ctrl+C). It prints a final stats table and exits cleanly.
+6. **Update client configurations** to point at the target registry.
+7. **Keep the source in READONLY for 72+ hours** as a rollback window.
+
+### Running in production
+
+For long-running production deployments, run the replicator as a systemd service, Docker container, or Kubernetes Deployment. See the [srctl continuous replication guide](https://github.com/akrishnanDG/srctl/blob/main/docs/continuous-replication-guide.md) for systemd, Docker, and Kubernetes deployment examples, Prometheus alert rules, and Grafana dashboard queries.
+
+---
+
+## One-Time Migration with `srctl clone`
 
 The full migration flow using `srctl clone`:
 

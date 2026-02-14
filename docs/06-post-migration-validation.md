@@ -101,6 +101,36 @@ srctl validate --file evolved-schema.avsc --subject my-subject \
 
 ## 4. Cutover and Rollback
 
+### 4a. Cutover from `srctl replicate` (Continuous Replication)
+
+If you used `srctl replicate` for continuous sync, the cutover process differs from a one-time clone:
+
+1. **Verify replication is caught up** -- Check that the replicator CLI status shows stable offset with zero errors. Run `srctl compare` to confirm source and target are in sync.
+
+2. **Set the source to READONLY**:
+   ```bash
+   srctl mode set READONLY --global --url http://source-sr:8081
+   ```
+
+3. **Wait for drain** -- The replicator processes the READONLY mode event and any in-flight schemas. Watch the status output until the offset stabilizes.
+
+4. **Run final validation**:
+   ```bash
+   srctl compare \
+     --url http://source-sr:8081 \
+     --target-url https://target-sr.confluent.cloud \
+     --target-username <API_KEY> --target-password <API_SECRET> \
+     --workers 100
+   ```
+
+5. **Stop the replicator** -- Send SIGINT (Ctrl+C) or SIGTERM. The replicator commits final offsets, restores target registry mode, and prints a summary.
+
+6. **Update client configurations** (see section 2 above).
+
+7. **Keep the source in READONLY for 72+ hours.** If you need to roll back, restart the replicator (it resumes from the last offset) and point clients back to the source.
+
+### 4b. Cutover from `srctl clone` (One-Time Copy)
+
 After `srctl clone` completes and `srctl compare` passes, perform a one-time cutover:
 
 1. **Set the source registry to READONLY** to prevent any further schema registrations:

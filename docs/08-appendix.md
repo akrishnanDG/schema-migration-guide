@@ -53,6 +53,7 @@
 | `srctl backup` | Full backup optimized for disaster recovery. |
 | `srctl restore` | Restore from backup. Supports selective restore by prefix or type. |
 | `srctl compare` | Diff two registries: missing subjects, version mismatches, schema differences. |
+| `srctl replicate` | Continuous real-time replication via `_schemas` Kafka topic. Supports SASL/TLS, subject filtering, Prometheus metrics. |
 | `srctl config get/set` | Get or set compatibility at global or subject level. |
 | `srctl mode get/set` | Get or set mode (READWRITE, READONLY, IMPORT). |
 | `srctl split analyze` | Plan how to partition schemas across multiple destinations. |
@@ -101,6 +102,7 @@ Full docs: [https://github.com/akrishnanDG/srctl](https://github.com/akrishnanDG
 | **Compatibility Level** | Evolution rule: BACKWARD, FORWARD, FULL, NONE. Set globally or per subject. |
 | **Context** | Namespace prefix (`:.name:subject`) for logical separation within one registry. |
 | **Schema Linking** | Continuous schema replication between CP Enterprise SR instances (CP Enterprise only; not available on CP Community). |
+| **`srctl replicate`** | Continuous schema replication by consuming the `_schemas` Kafka topic. Works with any source (CP Community, CP Enterprise). Alternative to Schema Exporter for non-Enterprise sources. |
 | **SerDe** | Serializer/Deserializer. SR-aware SerDes embed schema ID in the payload. |
 | **Wire Format** | Binary encoding: magic byte (`0x0`) + 4-byte schema ID + payload. |
 | **IMPORT Mode** | Allows registration with pre-assigned schema IDs for ID-preserving migration. |

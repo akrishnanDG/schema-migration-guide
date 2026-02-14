@@ -156,7 +156,95 @@ srctl export --url http://source-sr:8081 --output ./export/ --subject-map ./subj
 
 ---
 
-## 11. Duplicate Schema Versions
+## 11. Continuous Replication Issues (`srctl replicate`)
+
+### Replicator cannot connect to Kafka brokers
+
+**Problem:** `srctl replicate` fails with `failed to create Kafka consumer` or `connection refused`.
+
+**Cause:** Incorrect broker addresses, missing SASL credentials, or network/firewall rules blocking access to the Kafka cluster.
+
+**Solution:** Verify Kafka connectivity and credentials:
+```bash
+# Test broker connectivity
+nc -zv broker1.internal 9092
+
+# Check config in srctl.yaml
+cat ~/.srctl/srctl.yaml
+# Ensure the source registry has kafka.brokers configured
+
+# Or pass explicitly via CLI flags
+srctl replicate --source on-prem --target ccloud \
+  --kafka-brokers broker1:9092 \
+  --kafka-sasl-mechanism PLAIN \
+  --kafka-sasl-user <user> \
+  --kafka-sasl-password <pass> \
+  --kafka-tls
+```
+
+### Replicator is running but schemas are not appearing on target
+
+**Problem:** The replicator status shows `schemas=0` even though schemas exist on the source.
+
+**Cause:** The consumer group has committed offsets past the existing events (from a previous run), or the `--filter` flag is filtering out all subjects.
+
+**Solution:**
+```bash
+# Use a fresh consumer group to start from the beginning
+srctl replicate --source on-prem --target ccloud \
+  --group-id "fresh-$(date +%s)"
+
+# Or check if --filter is too restrictive
+# Remove --filter to replicate all subjects
+```
+
+### Replicator shows high error count
+
+**Problem:** The status line shows increasing errors, e.g., `errors=42`.
+
+**Cause:** The target SR is rejecting schema registrations (incompatible schemas, rate limiting, auth errors).
+
+**Solution:** Check the replicator log for specific error messages. Common causes:
+```bash
+# Rate limiting (429) -- reduce parallelism or add backoff
+# The replicator retries automatically, but sustained 429s indicate you need to slow down
+
+# Incompatible schema (422) -- the target has stricter compatibility than the source
+# Temporarily relax compatibility on the target:
+srctl config set NONE --subject <subject> \
+  --url https://target-sr.confluent.cloud \
+  --username <API_KEY> --password <API_SECRET>
+
+# Auth errors (401/403) -- verify API key has ResourceOwner role for IMPORT mode
+```
+
+### Replicator appears stalled (no new events processed)
+
+**Problem:** The status shows stable offset and `events` count is not increasing.
+
+**Cause:** No new schemas are being registered on the source (this is normal), or the Kafka consumer is stuck.
+
+**Solution:** Register a test schema on the source and check if the event count increases. If not, restart the replicator with `--no-initial-sync` (it resumes from the last committed offset).
+
+### Replicator crashed -- will events be lost?
+
+**Problem:** The replicator process died unexpectedly.
+
+**Cause:** OOM, host restart, network partition, etc.
+
+**Solution:** Restart the replicator. Events are **not lost** because:
+- Consumer group offsets are committed only after successful batch processing
+- On restart, the consumer resumes from the last committed offset
+- Schema registration is idempotent (re-registering produces the same result)
+
+```bash
+# Resume from where it left off
+srctl replicate --source on-prem --target ccloud --no-initial-sync
+```
+
+---
+
+## 12. Duplicate Schema Versions
 
 **Problem:** A subject has more versions than expected, with identical content under multiple version numbers.
 
